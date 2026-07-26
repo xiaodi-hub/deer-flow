@@ -1,0 +1,23 @@
+{
+  "skill_name": "codebase-learning",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我是小白，带我在不改代码的前提下快速看懂这个开源项目。先讲整体架构，再带我沿一条真实用户请求读代码。",
+      "expected_output": "A beginner-friendly, evidence-backed architecture map, one real end-to-end path with clickable published-source links when a remote is available, one active-recall question, and focused next lessons.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "我准备给认证模块提 PR。请循序渐进带我学习，不要直接替我改代码；每个关键点先问我一个问题。",
+      "expected_output": "A contribution-oriented guided lesson that traces the authentication path, identifies relevant contracts and tests, asks one prediction at a time, and does not change code.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "复习我上次学到的请求处理流程，然后继续讲错误处理和重试逻辑。",
+      "expected_output": "A retrieval-first follow-up lesson that distinguishes confirmed source behavior from runtime assumptions and continues with error-handling evidence.",
+      "files": []
+    }
+  ]
+}
