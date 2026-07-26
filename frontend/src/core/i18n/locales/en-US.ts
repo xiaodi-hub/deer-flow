@@ -391,9 +391,9 @@ export const enUS: Translations = {
 
   // Agents
   agents: {
-    title: "Agents",
+    title: "Agent Gallery",
     description:
-      "Create and manage custom agents with specialized prompts and capabilities.",
+      "Choose a scene-specific agent with its own prompt, model, tools, skills, and memory.",
     newAgent: "New Agent",
     emptyTitle: "No custom agents yet",
     emptyDescription:

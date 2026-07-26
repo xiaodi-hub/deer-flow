@@ -1,6 +1,15 @@
 "use client";
 
-import { BotIcon, MessageSquareIcon, Trash2Icon } from "lucide-react";
+import {
+  BotIcon,
+  BrainCircuitIcon,
+  GraduationCapIcon,
+  LineChartIcon,
+  MessageSquareIcon,
+  NewspaperIcon,
+  SearchIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { type ComponentProps, type ReactElement, useState } from "react";
 import { toast } from "sonner";
@@ -100,6 +109,38 @@ function TruncatedBadge({
   );
 }
 
+function resolveAgentIcon(
+  icon: string | null | undefined,
+  category: string | null | undefined,
+  name: string,
+) {
+  const key = `${icon ?? ""} ${category ?? ""} ${name}`.toLowerCase();
+  if (
+    key.includes("stock") ||
+    key.includes("finance") ||
+    key.includes("股票")
+  ) {
+    return LineChartIcon;
+  }
+  if (key.includes("news") || key.includes("资讯") || key.includes("ai")) {
+    return NewspaperIcon;
+  }
+  if (key.includes("learn") || key.includes("study") || key.includes("学习")) {
+    return GraduationCapIcon;
+  }
+  if (
+    key.includes("research") ||
+    key.includes("search") ||
+    key.includes("研究")
+  ) {
+    return SearchIcon;
+  }
+  if (key.includes("brain") || key.includes("coach")) {
+    return BrainCircuitIcon;
+  }
+  return BotIcon;
+}
+
 export function AgentCard({ agent }: AgentCardProps) {
   const { t } = useI18n();
   const router = useRouter();
@@ -120,6 +161,12 @@ export function AgentCard({ agent }: AgentCardProps) {
     }
   }
 
+  const displayName = agent.display_name ?? agent.name;
+  const category = agent.category?.trim();
+  const Icon = resolveAgentIcon(agent.icon, category, agent.name);
+  const visibleTags = agent.tags?.slice(0, 3) ?? [];
+  const visibleStarters = agent.starter_prompts?.slice(0, 2) ?? [];
+
   return (
     <>
       <Card className="group flex flex-col transition-shadow hover:shadow-md">
@@ -127,21 +174,30 @@ export function AgentCard({ agent }: AgentCardProps) {
           <div className="flex min-w-0 items-start justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
               <div className="bg-primary/10 text-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
-                <BotIcon className="h-5 w-5" />
+                <Icon className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <TruncatedTooltip text={agent.name}>
+                <TruncatedTooltip text={displayName}>
                   <CardTitle className="truncate text-base">
-                    {agent.name}
+                    {displayName}
                   </CardTitle>
                 </TruncatedTooltip>
-                {agent.model && (
-                  <TruncatedBadge
-                    label={agent.model}
-                    variant="secondary"
-                    className="mt-0.5 text-xs"
-                  />
-                )}
+                <div className="mt-1 flex min-w-0 flex-wrap gap-1">
+                  {category && (
+                    <TruncatedBadge
+                      label={category}
+                      variant="outline"
+                      className="text-xs"
+                    />
+                  )}
+                  {agent.model && (
+                    <TruncatedBadge
+                      label={agent.model}
+                      variant="secondary"
+                      className="text-xs"
+                    />
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -154,13 +210,33 @@ export function AgentCard({ agent }: AgentCardProps) {
           )}
         </CardHeader>
 
-        {(agent.tool_groups?.length ?? agent.skills?.length ?? 0) > 0 && (
+        {((agent.tool_groups?.length ?? 0) > 0 ||
+          (agent.skills?.length ?? 0) > 0 ||
+          (agent.mcp_servers?.length ?? 0) > 0 ||
+          visibleTags.length > 0 ||
+          visibleStarters.length > 0) && (
           <CardContent className="pt-0 pb-3">
             <div className="flex flex-wrap gap-1">
+              {visibleTags.map((tag) => (
+                <TruncatedBadge
+                  key={`tag:${tag}`}
+                  label={tag}
+                  variant="secondary"
+                  className="text-xs"
+                />
+              ))}
               {agent.tool_groups?.map((group) => (
                 <TruncatedBadge
                   key={`tg:${group}`}
                   label={group}
+                  variant="outline"
+                  className="text-xs"
+                />
+              ))}
+              {agent.mcp_servers?.map((server) => (
+                <TruncatedBadge
+                  key={`mcp:${server}`}
+                  label={server}
                   variant="outline"
                   className="text-xs"
                 />
@@ -174,6 +250,17 @@ export function AgentCard({ agent }: AgentCardProps) {
                 />
               ))}
             </div>
+            {visibleStarters.length > 0 && (
+              <div className="mt-3 space-y-1">
+                {visibleStarters.map((prompt) => (
+                  <TruncatedTooltip key={prompt} text={prompt}>
+                    <div className="text-muted-foreground bg-muted/50 line-clamp-1 rounded-md px-2 py-1 text-xs">
+                      {prompt}
+                    </div>
+                  </TruncatedTooltip>
+                ))}
+              </div>
+            )}
           </CardContent>
         )}
 

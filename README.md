@@ -11,6 +11,8 @@ English | [中文](./README_zh.md) | [日本語](./README_ja.md) | [Français](.
 
 DeerFlow (**D**eep **E**xploration and **E**fficient **R**esearch **Flow**) is an open-source **super agent harness** that orchestrates **sub-agents**, **memory**, and **sandboxes** to do almost anything — powered by **extensible skills**.
 
+The web app opens into an **Agent Gallery**: users pick a scene-specific agent (for example stock analysis, AI news, or learning) and then create conversations under that agent. Each custom agent profile can define its own SOUL prompt, default model, tool groups, MCP allowlists, skills, starter prompts, and memory policy while still running on DeerFlow's shared `lead_agent` runtime.
+
 https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
 
 > [!NOTE]

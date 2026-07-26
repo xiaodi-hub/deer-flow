@@ -87,13 +87,30 @@ class TestAgentConfig:
 
         cfg = AgentConfig(
             name="code-reviewer",
+            display_name="Code Reviewer",
             description="Specialized for code review",
+            category="engineering",
+            icon="code",
+            tags=["review", "python"],
             model="deepseek-v3",
             tool_groups=["file:read", "bash"],
+            mcp_servers=["github"],
+            mcp_tools=["github_search"],
+            starter_prompts=["Review this PR"],
         )
         assert cfg.name == "code-reviewer"
+        assert cfg.display_name == "Code Reviewer"
+        assert cfg.category == "engineering"
+        assert cfg.icon == "code"
+        assert cfg.tags == ["review", "python"]
         assert cfg.model == "deepseek-v3"
         assert cfg.tool_groups == ["file:read", "bash"]
+        assert cfg.mcp_servers == ["github"]
+        assert cfg.mcp_tools == ["github_search"]
+        assert cfg.memory.read == ["global", "agent"]
+        assert cfg.memory.write.default == "agent"
+        assert cfg.starter_prompts == ["Review this PR"]
+        assert cfg.enabled is True
 
     def test_config_from_dict(self):
         from deerflow.config.agents_config import AgentConfig
@@ -633,6 +650,36 @@ class TestAgentsAPI:
         assert response.status_code == 200
         assert response.json()["description"] == "new desc"
 
+    def test_update_agent_profile_fields(self, agent_client):
+        agent_client.post("/api/agents", json={"name": "profile-agent", "description": "old desc", "soul": "p"})
+
+        response = agent_client.put(
+            "/api/agents/profile-agent",
+            json={
+                "display_name": "Profile Agent",
+                "category": "learning",
+                "icon": "graduation",
+                "tags": ["course", "quiz"],
+                "mcp_servers": ["school"],
+                "mcp_tools": ["school_search"],
+                "memory": {"read": ["global"], "write": {"default": "global", "stable_user_preferences": "global"}},
+                "starter_prompts": ["Build a study plan"],
+                "enabled": False,
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["display_name"] == "Profile Agent"
+        assert data["category"] == "learning"
+        assert data["icon"] == "graduation"
+        assert data["tags"] == ["course", "quiz"]
+        assert data["mcp_servers"] == ["school"]
+        assert data["mcp_tools"] == ["school_search"]
+        assert data["memory"]["read"] == ["global"]
+        assert data["memory"]["write"]["default"] == "global"
+        assert data["starter_prompts"] == ["Build a study plan"]
+        assert data["enabled"] is False
+
     def test_update_agent_preserves_hand_authored_github_block(self, agent_client):
         """A hand-authored ``github:`` block on disk must survive PATCH.
 
@@ -733,16 +780,32 @@ class TestAgentsAPI:
     def test_create_agent_with_model_and_tool_groups(self, agent_client):
         payload = {
             "name": "specialized",
+            "display_name": "Specialized Analyst",
             "description": "Specialized agent",
+            "category": "research",
+            "icon": "search",
+            "tags": ["market", "briefing"],
             "model": "deepseek-v3",
             "tool_groups": ["file:read", "bash"],
+            "mcp_servers": ["market-data"],
+            "mcp_tools": ["market-data_quote"],
+            "memory": {"read": ["global", "agent"], "write": {"default": "agent", "stable_user_preferences": "global"}},
+            "starter_prompts": ["Brief the market open"],
             "soul": "You are specialized.",
         }
         response = agent_client.post("/api/agents", json=payload)
         assert response.status_code == 201
         data = response.json()
+        assert data["display_name"] == "Specialized Analyst"
+        assert data["category"] == "research"
+        assert data["icon"] == "search"
+        assert data["tags"] == ["market", "briefing"]
         assert data["model"] == "deepseek-v3"
         assert data["tool_groups"] == ["file:read", "bash"]
+        assert data["mcp_servers"] == ["market-data"]
+        assert data["mcp_tools"] == ["market-data_quote"]
+        assert data["memory"]["read"] == ["global", "agent"]
+        assert data["starter_prompts"] == ["Brief the market open"]
 
     def test_create_persists_files_on_disk(self, agent_client, tmp_path):
         agent_client.post("/api/agents", json={"name": "disk-check", "soul": "disk soul"})

@@ -510,12 +510,15 @@ def _make_lead_agent(config: RunnableConfig, *, app_config: AppConfig):
     config["metadata"].update(
         {
             "agent_name": agent_name or "default",
+            "agent_display_name": agent_config.display_name if agent_config else None,
             "model_name": model_name or "default",
             "thinking_enabled": thinking_enabled,
             "reasoning_effort": reasoning_effort,
             "is_plan_mode": is_plan_mode,
             "subagent_enabled": subagent_enabled,
             "tool_groups": agent_config.tool_groups if agent_config else None,
+            "mcp_servers": agent_config.mcp_servers if agent_config else None,
+            "mcp_tools": agent_config.mcp_tools if agent_config else None,
             "available_skills": sorted(available_skills) if available_skills is not None else None,
         }
     )
@@ -618,7 +621,14 @@ def _make_lead_agent(config: RunnableConfig, *, app_config: AppConfig):
     is_webhook_channel = channel_name in _WEBHOOK_CHANNELS
     extra_tools = [update_agent] if agent_name and not is_webhook_channel else []
     # Default lead agent (unchanged behavior)
-    raw_tools = get_available_tools(model_name=model_name, groups=agent_config.tool_groups if agent_config else None, subagent_enabled=subagent_enabled, app_config=resolved_app_config)
+    raw_tools = get_available_tools(
+        model_name=model_name,
+        groups=agent_config.tool_groups if agent_config else None,
+        subagent_enabled=subagent_enabled,
+        app_config=resolved_app_config,
+        mcp_server_allowlist=agent_config.mcp_servers if agent_config else None,
+        mcp_tool_allowlist=agent_config.mcp_tools if agent_config else None,
+    )
     configured_tools = raw_tools + extra_tools
     if non_interactive:
         configured_tools = [tool for tool in configured_tools if tool.name not in _NON_INTERACTIVE_DISABLED_TOOL_NAMES]

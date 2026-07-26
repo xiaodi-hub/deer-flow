@@ -20,6 +20,12 @@ delegation, and extensible tools (built-in, MCP, community), all per-thread isol
 frontend is a Next.js chat UI. External IM platforms (Feishu, Slack, Telegram, Discord,
 DingTalk) bridge into the same agent through the Gateway.
 
+The default web entry is the **Agent Gallery**. Users choose a scene-specific custom
+agent profile (for example finance analysis, AI news, or learning) and then create
+one or more conversations under that profile. Profiles still run through the shared
+`lead_agent` runtime, but may carry their own model, tool groups, MCP allowlists,
+skill allowlist, `SOUL.md`, gallery metadata, and memory policy.
+
 ## Service Topology
 
 A single `make dev` / Docker stack runs four cooperating services:

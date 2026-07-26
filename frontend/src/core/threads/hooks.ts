@@ -1038,10 +1038,14 @@ export function useThreadStream({
 
   const queryClient = useQueryClient();
   const updateSubtask = useUpdateSubtask();
+  const assistantId =
+    typeof context.agent_name === "string" && context.agent_name.length > 0
+      ? context.agent_name
+      : "lead_agent";
 
   const thread = useStream<AgentThreadState>({
     client: getAPIClient(isMock),
-    assistantId: "lead_agent",
+    assistantId,
     threadId: onStreamThreadId,
     reconnectOnMount: true,
     fetchStateHistory: { limit: 1 },

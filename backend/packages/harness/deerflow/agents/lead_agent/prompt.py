@@ -750,16 +750,35 @@ def _get_memory_context(agent_name: str | None = None, *, app_config: AppConfig 
         if not config.enabled or not config.injection_enabled:
             return ""
 
-        memory_content = get_memory_manager().get_context(
-            user_id=get_effective_user_id(),
-            agent_name=agent_name,
-        )
+        user_id = get_effective_user_id()
+        manager = get_memory_manager()
+        if agent_name:
+            try:
+                from deerflow.config.agents_config import load_agent_config
 
-        if not memory_content.strip():
+                agent_cfg = load_agent_config(agent_name, user_id=user_id)
+                read_scopes = agent_cfg.memory.read if agent_cfg is not None else ["global", "agent"]
+            except Exception:
+                logger.debug("Failed to load memory policy for agent %s; using hybrid memory", agent_name, exc_info=True)
+                read_scopes = ["global", "agent"]
+        else:
+            read_scopes = ["global"]
+
+        sections: list[str] = []
+        if "global" in read_scopes:
+            global_memory = manager.get_context(user_id=user_id, agent_name=None)
+            if global_memory.strip():
+                sections.append(f"<global_memory>\n{global_memory}\n</global_memory>")
+        if agent_name and "agent" in read_scopes:
+            agent_memory = manager.get_context(user_id=user_id, agent_name=agent_name)
+            if agent_memory.strip():
+                sections.append(f'<agent_memory name="{html.escape(agent_name, quote=True)}">\n{agent_memory}\n</agent_memory>')
+
+        if not sections:
             return ""
 
         return f"""<memory>
-{memory_content}
+{chr(10).join(sections)}
 </memory>
 """
     except Exception:

@@ -305,6 +305,32 @@ def test_get_memory_context_uses_explicit_app_config_without_global_config(monke
     }
 
 
+def test_get_memory_context_injects_global_and_agent_memory(monkeypatch):
+    from deerflow.config.agents_config import AgentConfig
+
+    explicit_config = SimpleNamespace(
+        memory=SimpleNamespace(enabled=True, injection_enabled=True, max_injection_tokens=1234, token_counting="tiktoken"),
+    )
+    calls: list[tuple[str | None, str]] = []
+
+    def fake_get_context(user_id, *, agent_name=None, thread_id=None):
+        calls.append((agent_name, user_id))
+        return "global facts" if agent_name is None else "agent facts"
+
+    manager = SimpleNamespace(get_context=fake_get_context)
+    monkeypatch.setattr("deerflow.runtime.user_context.get_effective_user_id", lambda: "user-1")
+    monkeypatch.setattr("deerflow.agents.memory.get_memory_manager", lambda: manager)
+    monkeypatch.setattr("deerflow.config.agents_config.load_agent_config", lambda name, user_id=None: AgentConfig(name=name))
+
+    context = prompt_module._get_memory_context("agent-a", app_config=explicit_config)
+
+    assert "<global_memory>" in context
+    assert "global facts" in context
+    assert 'agent_memory name="agent-a"' in context
+    assert "agent facts" in context
+    assert calls == [(None, "user-1"), ("agent-a", "user-1")]
+
+
 def test_refresh_skills_system_prompt_cache_async_reloads_immediately(monkeypatch, tmp_path):
     def make_skill(name: str) -> Skill:
         skill_dir = tmp_path / name

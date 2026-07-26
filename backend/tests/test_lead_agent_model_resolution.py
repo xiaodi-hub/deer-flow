@@ -835,3 +835,35 @@ def test_memory_middleware_uses_explicit_memory_config_without_global_read(monke
     middleware = MemoryMiddleware(memory_config=MemoryConfig(enabled=False))
 
     assert middleware.after_agent({"messages": []}, runtime=MagicMock(context={"thread_id": "thread-1"})) is None
+
+
+def test_memory_middleware_honors_agent_global_write_policy(monkeypatch):
+    from deerflow.agents.middlewares.memory_middleware import MemoryMiddleware
+    from deerflow.config.agents_config import AgentConfig, AgentMemoryConfig, AgentMemoryWriteConfig
+
+    captured: dict[str, object] = {}
+
+    class FakeMemoryManager:
+        def add(self, thread_id, messages, *, agent_name=None, user_id=None, trace_id=None):
+            captured.update(
+                {
+                    "thread_id": thread_id,
+                    "messages": messages,
+                    "agent_name": agent_name,
+                    "user_id": user_id,
+                }
+            )
+
+    monkeypatch.setattr("deerflow.agents.middlewares.memory_middleware.get_memory_manager", lambda: FakeMemoryManager())
+    monkeypatch.setattr("deerflow.agents.middlewares.memory_middleware.get_effective_user_id", lambda: "user-1")
+    monkeypatch.setattr(
+        "deerflow.config.agents_config.load_agent_config",
+        lambda name, user_id=None: AgentConfig(name=name, memory=AgentMemoryConfig(write=AgentMemoryWriteConfig(default="global"))),
+    )
+
+    middleware = MemoryMiddleware(agent_name="agent-a", memory_config=MemoryConfig(enabled=True))
+    middleware.after_agent({"messages": [MagicMock(type="human")]}, runtime=MagicMock(context={"thread_id": "thread-1"}))
+
+    assert captured["thread_id"] == "thread-1"
+    assert captured["agent_name"] is None
+    assert captured["user_id"] == "user-1"

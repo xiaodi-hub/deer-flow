@@ -89,6 +89,18 @@ def _normalize_nullish_string(value: object) -> object:
 OptionalText = Annotated[str | None, BeforeValidator(_normalize_nullish_string)]
 OptionalStringList = Annotated[list[str] | None, BeforeValidator(_normalize_nullish_string)]
 
+_PROFILE_FIELDS_TO_CARRY = (
+    "display_name",
+    "category",
+    "icon",
+    "tags",
+    "mcp_servers",
+    "mcp_tools",
+    "memory",
+    "starter_prompts",
+    "enabled",
+)
+
 
 @tool(parse_docstring=True)
 def update_agent(
@@ -226,6 +238,11 @@ def update_agent(
         config_data["skills"] = new_skills
     if skills is not None and skills != existing_cfg.skills:
         updated_fields.append("skills")
+
+    existing_profile_fields = existing_cfg.model_dump(exclude_unset=True, mode="json")
+    for key in _PROFILE_FIELDS_TO_CARRY:
+        if key in existing_profile_fields:
+            config_data[key] = existing_profile_fields[key]
 
     # Preserve every top-level AgentConfig field that this tool does not
     # expose as an argument (currently ``github:``, plus any future field

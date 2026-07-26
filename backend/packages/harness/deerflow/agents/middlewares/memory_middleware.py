@@ -49,6 +49,19 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
         self._agent_name = agent_name
         self._memory_config = memory_config
 
+    def _write_agent_name(self, user_id: str) -> str | None:
+        if not self._agent_name:
+            return None
+        try:
+            from deerflow.config.agents_config import load_agent_config
+
+            agent_cfg = load_agent_config(self._agent_name, user_id=user_id)
+            if agent_cfg is not None and agent_cfg.memory.write.default == "global":
+                return None
+        except Exception:
+            logger.debug("Failed to load memory write policy for agent %s; using agent memory", self._agent_name, exc_info=True)
+        return self._agent_name
+
     @override
     def after_agent(self, state: MemoryMiddlewareState, runtime: Runtime) -> dict | None:
         """Queue conversation for memory update after agent completes.
@@ -95,12 +108,14 @@ class MemoryMiddleware(AgentMiddleware[MemoryMiddlewareState]):
         if trace_id is None:
             trace_id = get_current_trace_id()
 
+        write_agent_name = self._write_agent_name(user_id)
+
         # Hand raw messages to the manager; the backend filters to user + final-AI
         # turns, validates, detects correction/reinforcement, and enqueues.
         get_memory_manager().add(
             thread_id,
             messages,
-            agent_name=self._agent_name,
+            agent_name=write_agent_name,
             user_id=user_id,
             trace_id=trace_id,
         )

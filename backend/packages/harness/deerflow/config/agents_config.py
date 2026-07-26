@@ -10,7 +10,7 @@ per-user layout.
 import logging
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -145,6 +145,36 @@ class GitHubAgentConfig(BaseModel):
         return self
 
 
+class AgentMemoryWriteConfig(BaseModel):
+    """Write targets for an agent's memory policy."""
+
+    default: Literal["global", "agent"] = "agent"
+    stable_user_preferences: Literal["global", "agent"] = "global"
+
+
+class AgentMemoryConfig(BaseModel):
+    """Memory policy for a custom agent profile.
+
+    ``read`` controls which buckets are injected into the agent prompt.
+    ``write.default`` controls where the automatic MemoryMiddleware stores
+    conversation-derived memory for this agent.
+    """
+
+    read: list[Literal["global", "agent"]] = Field(default_factory=lambda: ["global", "agent"])
+    write: AgentMemoryWriteConfig = Field(default_factory=AgentMemoryWriteConfig)
+
+    @field_validator("read")
+    @classmethod
+    def _dedupe_read_scopes(cls, value: list[Literal["global", "agent"]]) -> list[Literal["global", "agent"]]:
+        seen: set[str] = set()
+        scopes: list[Literal["global", "agent"]] = []
+        for scope in value:
+            if scope not in seen:
+                scopes.append(scope)
+                seen.add(scope)
+        return scopes
+
+
 def validate_agent_name(name: str | None) -> str | None:
     """Validate a custom agent name before using it in filesystem paths."""
     if name is None:
@@ -160,9 +190,15 @@ class AgentConfig(BaseModel):
     """Configuration for a custom agent."""
 
     name: str
+    display_name: str | None = None
     description: str = ""
+    category: str | None = None
+    icon: str | None = None
+    tags: list[str] = Field(default_factory=list)
     model: str | None = None
     tool_groups: list[str] | None = None
+    mcp_servers: list[str] | None = None
+    mcp_tools: list[str] | None = None
     # skills controls which skills are discoverable and may be activated by the
     # agent. It does not activate their allowed-tools policies at construction:
     # - None (or omitted): load all enabled skills (default fallback behavior)
@@ -173,6 +209,9 @@ class AgentConfig(BaseModel):
     # webhook events from the gateway dispatcher. None means "no GitHub
     # integration", which is the case for every existing agent.
     github: GitHubAgentConfig | None = None
+    memory: AgentMemoryConfig = Field(default_factory=AgentMemoryConfig)
+    starter_prompts: list[str] = Field(default_factory=list)
+    enabled: bool = True
 
 
 # Fields explicitly managed by the agent-update surfaces (the
@@ -183,7 +222,24 @@ class AgentConfig(BaseModel):
 # drop hand-authored configuration. ``name`` is included because the
 # updaters always re-emit it from the directory name (it must never come
 # from the request body).
-MANAGED_AGENT_CONFIG_FIELDS: frozenset[str] = frozenset({"name", "description", "model", "tool_groups", "skills"})
+MANAGED_AGENT_CONFIG_FIELDS: frozenset[str] = frozenset(
+    {
+        "name",
+        "display_name",
+        "description",
+        "category",
+        "icon",
+        "tags",
+        "model",
+        "tool_groups",
+        "mcp_servers",
+        "mcp_tools",
+        "skills",
+        "memory",
+        "starter_prompts",
+        "enabled",
+    }
+)
 
 
 def preserve_non_managed_fields(existing_cfg: AgentConfig) -> dict[str, object]:

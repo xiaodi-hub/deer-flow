@@ -41,7 +41,18 @@ export type MockThread = {
 
 export type MockAgent = {
   name: string;
+  display_name?: string | null;
   description?: string;
+  category?: string | null;
+  icon?: string | null;
+  tags?: string[];
+  model?: string | null;
+  tool_groups?: string[] | null;
+  mcp_servers?: string[] | null;
+  mcp_tools?: string[] | null;
+  skills?: string[] | null;
+  starter_prompts?: string[];
+  enabled?: boolean;
   system_prompt?: string;
 };
 

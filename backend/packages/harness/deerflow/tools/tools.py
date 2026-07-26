@@ -7,7 +7,7 @@ from deerflow.config.app_config import AppConfig
 from deerflow.reflection import resolve_variable
 from deerflow.sandbox.security import is_host_bash_allowed
 from deerflow.tools.builtins import ask_clarification_tool, present_file_tool, review_skill_package, task_tool, view_image_tool
-from deerflow.tools.mcp_metadata import tag_mcp_tool
+from deerflow.tools.mcp_metadata import get_mcp_server_name, tag_mcp_tool
 from deerflow.tools.sync import make_sync_tool_wrapper
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,8 @@ def get_available_tools(
     subagent_enabled: bool = False,
     *,
     app_config: AppConfig | None = None,
+    mcp_server_allowlist: list[str] | None = None,
+    mcp_tool_allowlist: list[str] | None = None,
 ) -> list[BaseTool]:
     """Get all available tools from config.
 
@@ -60,6 +62,8 @@ def get_available_tools(
         include_mcp: Whether to include tools from MCP servers (default: True).
         model_name: Optional model name to determine if vision tools should be included.
         subagent_enabled: Whether to include subagent tools (task, task_status).
+        mcp_server_allowlist: Optional whitelist of MCP server names for custom agents.
+        mcp_tool_allowlist: Optional whitelist of MCP tool names for custom agents.
 
     Returns:
         List of available tools.
@@ -135,6 +139,12 @@ def get_available_tools(
                     # policy-filtered list because their skills load at startup.
                     for t in mcp_tools:
                         tag_mcp_tool(t)
+                    if mcp_server_allowlist is not None:
+                        allowed_servers = set(mcp_server_allowlist)
+                        mcp_tools = [t for t in mcp_tools if get_mcp_server_name(t) in allowed_servers]
+                    if mcp_tool_allowlist is not None:
+                        allowed_tools = set(mcp_tool_allowlist)
+                        mcp_tools = [t for t in mcp_tools if t.name in allowed_tools]
         except ImportError:
             logger.warning("MCP module not available. Install 'langchain-mcp-adapters' package to enable MCP tools.")
         except Exception as e:

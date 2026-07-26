@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from deerflow.config.agents_api_config import get_agents_api_config
-from deerflow.config.agents_config import AgentConfig, list_custom_agents, load_agent_config, load_agent_soul, preserve_non_managed_fields
+from deerflow.config.agents_config import AgentConfig, AgentMemoryConfig, list_custom_agents, load_agent_config, load_agent_soul, preserve_non_managed_fields
 from deerflow.config.paths import get_paths
 from deerflow.runtime.user_context import get_effective_user_id
 
@@ -24,10 +24,19 @@ class AgentResponse(BaseModel):
     """Response model for a custom agent."""
 
     name: str = Field(..., description="Agent name (hyphen-case)")
+    display_name: str | None = Field(default=None, description="Human-readable display name")
     description: str = Field(default="", description="Agent description")
+    category: str | None = Field(default=None, description="Gallery category")
+    icon: str | None = Field(default=None, description="Gallery icon key")
+    tags: list[str] = Field(default_factory=list, description="Gallery tags")
     model: str | None = Field(default=None, description="Optional model override")
     tool_groups: list[str] | None = Field(default=None, description="Optional tool group whitelist")
+    mcp_servers: list[str] | None = Field(default=None, description="Optional MCP server whitelist")
+    mcp_tools: list[str] | None = Field(default=None, description="Optional MCP tool whitelist")
     skills: list[str] | None = Field(default=None, description="Optional skill whitelist (None=all, []=none)")
+    memory: AgentMemoryConfig = Field(default_factory=AgentMemoryConfig, description="Agent memory policy")
+    starter_prompts: list[str] = Field(default_factory=list, description="Suggested prompts for new chats")
+    enabled: bool = Field(default=True, description="Whether this agent is visible/usable")
     soul: str | None = Field(default=None, description="SOUL.md content")
 
 
@@ -41,20 +50,38 @@ class AgentCreateRequest(BaseModel):
     """Request body for creating a custom agent."""
 
     name: str = Field(..., description="Agent name (must match ^[A-Za-z0-9-]+$, stored as lowercase)")
+    display_name: str | None = Field(default=None, description="Human-readable display name")
     description: str = Field(default="", description="Agent description")
+    category: str | None = Field(default=None, description="Gallery category")
+    icon: str | None = Field(default=None, description="Gallery icon key")
+    tags: list[str] = Field(default_factory=list, description="Gallery tags")
     model: str | None = Field(default=None, description="Optional model override")
     tool_groups: list[str] | None = Field(default=None, description="Optional tool group whitelist")
+    mcp_servers: list[str] | None = Field(default=None, description="Optional MCP server whitelist")
+    mcp_tools: list[str] | None = Field(default=None, description="Optional MCP tool whitelist")
     skills: list[str] | None = Field(default=None, description="Optional skill whitelist (None=all enabled, []=none)")
+    memory: AgentMemoryConfig | None = Field(default=None, description="Agent memory policy")
+    starter_prompts: list[str] = Field(default_factory=list, description="Suggested prompts for new chats")
+    enabled: bool = Field(default=True, description="Whether this agent is visible/usable")
     soul: str = Field(default="", description="SOUL.md content — agent personality and behavioral guardrails")
 
 
 class AgentUpdateRequest(BaseModel):
     """Request body for updating a custom agent."""
 
+    display_name: str | None = Field(default=None, description="Updated display name")
     description: str | None = Field(default=None, description="Updated description")
+    category: str | None = Field(default=None, description="Updated gallery category")
+    icon: str | None = Field(default=None, description="Updated gallery icon key")
+    tags: list[str] | None = Field(default=None, description="Updated gallery tags")
     model: str | None = Field(default=None, description="Updated model override")
     tool_groups: list[str] | None = Field(default=None, description="Updated tool group whitelist")
+    mcp_servers: list[str] | None = Field(default=None, description="Updated MCP server whitelist")
+    mcp_tools: list[str] | None = Field(default=None, description="Updated MCP tool whitelist")
     skills: list[str] | None = Field(default=None, description="Updated skill whitelist (None=all, []=none)")
+    memory: AgentMemoryConfig | None = Field(default=None, description="Updated memory policy")
+    starter_prompts: list[str] | None = Field(default=None, description="Updated suggested prompts")
+    enabled: bool | None = Field(default=None, description="Updated visibility/usability flag")
     soul: str | None = Field(default=None, description="Updated SOUL.md content")
 
 
@@ -96,12 +123,31 @@ def _agent_config_to_response(agent_cfg: AgentConfig, include_soul: bool = False
 
     return AgentResponse(
         name=agent_cfg.name,
+        display_name=agent_cfg.display_name,
         description=agent_cfg.description,
+        category=agent_cfg.category,
+        icon=agent_cfg.icon,
+        tags=agent_cfg.tags,
         model=agent_cfg.model,
         tool_groups=agent_cfg.tool_groups,
+        mcp_servers=agent_cfg.mcp_servers,
+        mcp_tools=agent_cfg.mcp_tools,
         skills=agent_cfg.skills,
+        memory=agent_cfg.memory,
+        starter_prompts=agent_cfg.starter_prompts,
+        enabled=agent_cfg.enabled,
         soul=soul,
     )
+
+
+def _set_if_not_none(config_data: dict, key: str, value) -> None:
+    if value is not None:
+        config_data[key] = value
+
+
+def _set_if_non_empty_list(config_data: dict, key: str, value: list[str]) -> None:
+    if value:
+        config_data[key] = value
 
 
 @router.get(
@@ -231,14 +277,27 @@ async def create_agent_endpoint(request: AgentCreateRequest) -> AgentResponse:
                 return None  # signals 409 to the caller
             # Write config.yaml
             config_data: dict = {"name": normalized_name}
+            _set_if_not_none(config_data, "display_name", request.display_name)
             if request.description:
                 config_data["description"] = request.description
+            _set_if_not_none(config_data, "category", request.category)
+            _set_if_not_none(config_data, "icon", request.icon)
+            _set_if_non_empty_list(config_data, "tags", request.tags)
             if request.model is not None:
                 config_data["model"] = request.model
             if request.tool_groups is not None:
                 config_data["tool_groups"] = request.tool_groups
+            if request.mcp_servers is not None:
+                config_data["mcp_servers"] = request.mcp_servers
+            if request.mcp_tools is not None:
+                config_data["mcp_tools"] = request.mcp_tools
             if request.skills is not None:
                 config_data["skills"] = request.skills
+            if request.memory is not None:
+                config_data["memory"] = request.memory.model_dump(mode="json")
+            _set_if_non_empty_list(config_data, "starter_prompts", request.starter_prompts)
+            if request.enabled is not True:
+                config_data["enabled"] = request.enabled
 
             config_file = agent_dir / "config.yaml"
             with open(config_file, "w", encoding="utf-8") as f:
@@ -320,13 +379,41 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
         # Use model_fields_set to distinguish "field omitted" from "explicitly set to null".
         # This is critical for skills where None means "inherit all" (not "don't change").
         fields_set = request.model_fields_set
-        config_changed = bool(fields_set & {"description", "model", "tool_groups", "skills"})
+        config_fields = {
+            "display_name",
+            "description",
+            "category",
+            "icon",
+            "tags",
+            "model",
+            "tool_groups",
+            "mcp_servers",
+            "mcp_tools",
+            "skills",
+            "memory",
+            "starter_prompts",
+            "enabled",
+        }
+        config_changed = bool(fields_set & config_fields)
 
         if config_changed:
             updated: dict = {
                 "name": agent_cfg.name,
                 "description": request.description if "description" in fields_set else agent_cfg.description,
             }
+            display_name = request.display_name if "display_name" in fields_set else agent_cfg.display_name
+            _set_if_not_none(updated, "display_name", display_name)
+
+            category = request.category if "category" in fields_set else agent_cfg.category
+            _set_if_not_none(updated, "category", category)
+
+            icon = request.icon if "icon" in fields_set else agent_cfg.icon
+            _set_if_not_none(updated, "icon", icon)
+
+            tags = request.tags if "tags" in fields_set else agent_cfg.tags
+            if tags:
+                updated["tags"] = tags
+
             new_model = request.model if "model" in fields_set else agent_cfg.model
             if new_model is not None:
                 updated["model"] = new_model
@@ -335,6 +422,14 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
             if new_tool_groups is not None:
                 updated["tool_groups"] = new_tool_groups
 
+            new_mcp_servers = request.mcp_servers if "mcp_servers" in fields_set else agent_cfg.mcp_servers
+            if new_mcp_servers is not None:
+                updated["mcp_servers"] = new_mcp_servers
+
+            new_mcp_tools = request.mcp_tools if "mcp_tools" in fields_set else agent_cfg.mcp_tools
+            if new_mcp_tools is not None:
+                updated["mcp_tools"] = new_mcp_tools
+
             # skills: None = inherit all, [] = no skills, ["a","b"] = whitelist
             if "skills" in fields_set:
                 new_skills = request.skills
@@ -342,6 +437,18 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
                 new_skills = agent_cfg.skills
             if new_skills is not None:
                 updated["skills"] = new_skills
+
+            new_memory = request.memory if "memory" in fields_set else agent_cfg.memory
+            if new_memory is not None:
+                updated["memory"] = new_memory.model_dump(mode="json")
+
+            starter_prompts = request.starter_prompts if "starter_prompts" in fields_set else agent_cfg.starter_prompts
+            if starter_prompts:
+                updated["starter_prompts"] = starter_prompts
+
+            enabled = request.enabled if "enabled" in fields_set else agent_cfg.enabled
+            if enabled is not True:
+                updated["enabled"] = enabled
 
             # Carry forward every top-level AgentConfig field this route does
             # not manage (currently ``github:``, plus any future field added
