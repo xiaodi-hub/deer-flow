@@ -93,7 +93,7 @@ export default function NewAgentPage() {
 
   const threadId = useMemo(() => uuid(), []);
 
-  const { thread, sendMessage } = useThreadStream({
+  const { thread, sendMessage, pendingUsageMessages } = useThreadStream({
     threadId: undefined,
     context: {
       mode: "flash",
@@ -409,6 +409,7 @@ export default function NewAgentPage() {
                 className={cn("size-full", showSaveHint ? "pt-4" : "pt-10")}
                 threadId={threadId}
                 thread={thread}
+                pendingMessages={pendingUsageMessages}
                 onSubmitHumanInput={
                   agentName ? handleSubmitHumanInput : undefined
                 }

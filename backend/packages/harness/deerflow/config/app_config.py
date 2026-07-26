@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import os
 from collections.abc import Mapping
@@ -6,7 +5,6 @@ from contextvars import ContextVar
 from pathlib import Path
 from typing import Any, Literal, Self
 
-import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
@@ -17,6 +15,7 @@ from deerflow.config.authorization_config import AuthorizationConfig, load_autho
 from deerflow.config.channel_connections_config import ChannelConnectionsConfig
 from deerflow.config.checkpointer_config import CheckpointerConfig, load_checkpointer_config_from_dict
 from deerflow.config.database_config import DatabaseConfig
+from deerflow.config.directory_loader import find_example_config_dir, get_config_dir_signature, load_config_directory, resolve_config_dir
 from deerflow.config.extensions_config import ExtensionsConfig
 from deerflow.config.guardrails_config import GuardrailsConfig, load_guardrails_config_from_dict
 from deerflow.config.input_polish_config import InputPolishConfig
@@ -27,7 +26,6 @@ from deerflow.config.read_before_write_config import ReadBeforeWriteConfig
 from deerflow.config.reload_boundary import format_field_description
 from deerflow.config.run_events_config import RunEventsConfig
 from deerflow.config.run_ownership_config import RunOwnershipConfig
-from deerflow.config.runtime_paths import existing_project_file
 from deerflow.config.safety_finish_reason_config import SafetyFinishReasonConfig
 from deerflow.config.sandbox_config import SandboxConfig
 from deerflow.config.scheduler_config import SchedulerConfig
@@ -93,15 +91,8 @@ def is_trace_correlation_enabled(config: Any) -> bool:
     return bool(getattr(enhance, "enabled", False))
 
 
-def _legacy_config_candidates() -> tuple[Path, ...]:
-    """Return source-tree config.yaml locations for monorepo compatibility."""
-    backend_dir = Path(__file__).resolve().parents[4]
-    repo_root = backend_dir.parent
-    return (backend_dir / "config.yaml", repo_root / "config.yaml")
-
-
 def logging_level_from_config(name: str | None) -> int:
-    """Map ``config.yaml`` ``log_level`` string to a :mod:`logging` level constant."""
+    """Map split config ``log_level`` string to a :mod:`logging` level constant."""
     mapping = logging.getLevelNamesMapping()
     return mapping.get((name or "info").strip().upper(), logging.INFO)
 
@@ -245,9 +236,9 @@ class AppConfig(BaseModel):
 
         Commenting out every entry under a top-level YAML key — e.g. ``models:``
         (a list) or ``memory:`` (an object), with only comments beneath it as
-        shipped throughout ``config.example.yaml`` — makes PyYAML parse the value
-        as ``None``. Without this, the documented ``cp config.example.yaml
-        config.yaml`` first-run flow crashes with an opaque ``Input should be a
+        shipped throughout ``config.example/`` — makes PyYAML parse the value
+        as ``None``. Without this, copying the example directory as a first-run
+        config can crash with an opaque ``Input should be a
         valid list`` / ``valid dictionary`` pydantic error for that section.
 
         Dropping the ``None`` lets each field fall back to its default: list
@@ -265,49 +256,29 @@ class AppConfig(BaseModel):
 
     @classmethod
     def resolve_config_path(cls, config_path: str | None = None) -> Path:
-        """Resolve the config file path.
+        """Resolve the split config directory.
 
         Priority:
-        1. If provided `config_path` argument, use it.
-        2. If provided `DEER_FLOW_CONFIG_PATH` environment variable, use it.
-        3. Otherwise, search the caller project root.
-        4. Finally, search legacy backend/repository-root defaults for monorepo compatibility.
+        1. If provided `config_path` argument, use it as a directory.
+        2. If provided `DEER_FLOW_CONFIG_DIR` environment variable, use it.
+        3. Otherwise, search the caller project root for `config/`.
         """
-        if config_path:
-            path = Path(config_path)
-            if not Path.exists(path):
-                raise FileNotFoundError(f"Config file specified by param `config_path` not found at {path}")
-            return path
-        elif os.getenv("DEER_FLOW_CONFIG_PATH"):
-            path = Path(os.getenv("DEER_FLOW_CONFIG_PATH"))
-            if not Path.exists(path):
-                raise FileNotFoundError(f"Config file specified by environment variable `DEER_FLOW_CONFIG_PATH` not found at {path}")
-            return path
-        else:
-            project_config = existing_project_file(("config.yaml",))
-            if project_config is not None:
-                return project_config
-
-            for path in _legacy_config_candidates():
-                if path.exists():
-                    return path
-            raise FileNotFoundError("`config.yaml` file not found in the project root or legacy backend/repository root locations")
+        return resolve_config_dir(config_path)
 
     @classmethod
     def from_file(cls, config_path: str | None = None) -> Self:
-        """Load config from YAML file.
+        """Load config from the split YAML config directory.
 
         See `resolve_config_path` for more details.
 
         Args:
-            config_path: Path to the config file.
+            config_path: Path to the config directory.
 
         Returns:
             AppConfig: The loaded config.
         """
         resolved_path = cls.resolve_config_path(config_path)
-        with open(resolved_path, encoding="utf-8") as f:
-            config_data = yaml.safe_load(f) or {}
+        config_data = load_config_directory(resolved_path)
 
         # Check config version before processing
         cls._check_config_version(config_data, resolved_path)
@@ -319,14 +290,15 @@ class AppConfig(BaseModel):
         if "circuit_breaker" in config_data:
             config_data["circuit_breaker"] = config_data["circuit_breaker"]
 
-        # Load extensions config separately (it's in a different file)
-        extensions_config = ExtensionsConfig.from_file()
+        # Load MCP/skill state from the same split config directory.
+        extensions_path = resolved_path / "mcp.yaml"
+        extensions_config = ExtensionsConfig.from_file(str(extensions_path)) if extensions_path.exists() else ExtensionsConfig.from_file()
         config_data["extensions"] = extensions_config.model_dump()
 
         result = cls.model_validate(config_data)
         if not result.models:
             logger.warning(
-                "No models are configured in %s. Add at least one entry under `models:` (see the commented examples in config.example.yaml) or run `make setup`.",
+                "No models are configured in %s. Add at least one entry under `models:` (see config.example/llm.yaml) or run `make setup`.",
                 resolved_path,
             )
         acp_agents = cls._validate_acp_agents(config_data.get("acp_agents", {}))
@@ -371,7 +343,7 @@ class AppConfig(BaseModel):
 
     @classmethod
     def _apply_database_defaults(cls, config_data: dict[str, Any]) -> None:
-        """Apply config.yaml defaults for persistence when the section is absent."""
+        """Apply split-config defaults for persistence when the section is absent."""
         database_config = config_data.get("database")
         if database_config is None:
             database_config = {}
@@ -383,7 +355,7 @@ class AppConfig(BaseModel):
 
     @classmethod
     def _check_config_version(cls, config_data: dict, config_path: Path) -> None:
-        """Check if the user's config.yaml is outdated compared to config.example.yaml.
+        """Check if the user's split config is outdated compared to config.example/.
 
         Emits a warning if the user's config_version is lower than the example's.
         Missing config_version is treated as version 0 (pre-versioning).
@@ -393,24 +365,12 @@ class AppConfig(BaseModel):
         except (TypeError, ValueError):
             user_version = 0
 
-        # Find config.example.yaml by searching config.yaml's directory and its parents
-        example_path = None
-        search_dir = config_path.parent
-        for _ in range(5):  # search up to 5 levels
-            candidate = search_dir / "config.example.yaml"
-            if candidate.exists():
-                example_path = candidate
-                break
-            parent = search_dir.parent
-            if parent == search_dir:
-                break
-            search_dir = parent
+        example_path = find_example_config_dir(config_path)
         if example_path is None:
             return
 
         try:
-            with open(example_path, encoding="utf-8") as f:
-                example_data = yaml.safe_load(f)
+            example_data = load_config_directory(example_path)
             raw = example_data.get("config_version", 0) if example_data else 0
             try:
                 example_version = int(raw)
@@ -421,7 +381,7 @@ class AppConfig(BaseModel):
 
         if user_version < example_version:
             logger.warning(
-                "Your config.yaml (version %d) is outdated — the latest version is %d. Run `make config-upgrade` to merge new fields into your config.",
+                "Your split config (version %d) is outdated — the latest version is %d. Run `make config-upgrade` to merge new fields into your config directory.",
                 user_version,
                 example_version,
             )
@@ -516,7 +476,7 @@ class AppConfig(BaseModel):
 _app_config: AppConfig | None = None
 _app_config_path: Path | None = None
 _app_config_mtime: float | None = None
-_ConfigSignature = tuple[float | None, int | None, str | None]
+_ConfigSignature = tuple[tuple[str, float | None, int | None, str | None], ...]
 _app_config_signature: _ConfigSignature | None = None
 _app_config_is_custom = False
 _current_app_config: ContextVar[AppConfig | None] = ContextVar("deerflow_current_app_config", default=None)
@@ -524,29 +484,21 @@ _current_app_config_stack: ContextVar[tuple[AppConfig | None, ...]] = ContextVar
 
 
 def _get_config_mtime(config_path: Path) -> float | None:
-    """Get the modification time of a config file if it exists."""
+    """Get the newest modification time of a config directory's YAML files."""
     try:
-        return config_path.stat().st_mtime
+        signature = get_config_dir_signature(config_path)
     except OSError:
         return None
+    mtimes = [entry[1] for entry in signature if entry[1] is not None]
+    return max(mtimes) if mtimes else None
 
 
 def _get_config_signature(config_path: Path) -> _ConfigSignature | None:
-    """Get cache metadata for a config file, including a content digest."""
+    """Get cache metadata for the split config directory."""
     try:
-        stat_result = config_path.stat()
+        return get_config_dir_signature(config_path)
     except OSError:
         return None
-
-    digest = hashlib.sha256()
-    try:
-        with config_path.open("rb") as f:
-            for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                digest.update(chunk)
-    except OSError:
-        return (stat_result.st_mtime, stat_result.st_size, None)
-
-    return (stat_result.st_mtime, stat_result.st_size, digest.hexdigest())
 
 
 def _load_and_cache_app_config(config_path: str | None = None) -> AppConfig:

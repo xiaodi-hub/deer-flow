@@ -1,0 +1,16 @@
+# DeerFlow Token 配置
+# token_usage 控制 token 使用量采集与展示。
+# token_budget 控制单次 run 的 token 预算、预警和强制收尾策略。
+
+# 是否采集并展示模型返回的 token usage。
+token_usage:
+  enabled: true
+
+# 单次 run 的 token 预算和超限处理策略。
+token_budget:
+  enabled: false
+  max_tokens: 200000
+  max_input_tokens: null
+  max_output_tokens: null
+  warn_threshold: 0.8
+  hard_stop_threshold: 1.0

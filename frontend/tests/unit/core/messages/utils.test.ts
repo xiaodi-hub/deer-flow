@@ -10,6 +10,7 @@ import {
   getBranchableAssistantGroupIds,
   getLatestHumanGroupIndex,
   getMessageCopyData,
+  getMessageIdentity,
   getMessageGroups,
   getStreamingMessageLookup,
   hasContent,
@@ -202,6 +203,41 @@ describe("current turn loading groups", () => {
         streamingMessages,
       }),
     ).toBe(false);
+  });
+
+  test("freezes prior turn reasoning when a later run starts", () => {
+    const groups = getMessageGroups(messages);
+    const latestHumanGroupIndex = getLatestHumanGroupIndex(groups);
+    const lastGroupIndex = groups.length - 1;
+    const currentRunMessageIdentities = new Set(
+      messages
+        .slice(2)
+        .map(getMessageIdentity)
+        .filter((identity): identity is string => Boolean(identity)),
+    );
+
+    expect(
+      isMessageGroupLoadingInCurrentTurn({
+        group: groups[1]!,
+        groupIndex: 1,
+        isThreadLoading: true,
+        latestHumanGroupIndex,
+        lastGroupIndex,
+        streamingMessages,
+        currentRunMessageIdentities,
+      }),
+    ).toBe(false);
+    expect(
+      isMessageGroupLoadingInCurrentTurn({
+        group: groups[3]!,
+        groupIndex: 3,
+        isThreadLoading: true,
+        latestHumanGroupIndex,
+        lastGroupIndex,
+        streamingMessages,
+        currentRunMessageIdentities,
+      }),
+    ).toBe(true);
   });
 });
 

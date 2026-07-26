@@ -65,7 +65,7 @@ services:
       # which is unreachable from inside the container
       - K8S_API_SERVER=https://host.docker.internal:26443
       # Optional: set PROVISIONER_API_KEY in .env to enable provisioner auth.
-      # The same value must be set on the gateway side via config.yaml sandbox.provisioner_api_key.
+      # The same value must be set on the gateway side via config/runtime.yaml sandbox.provisioner_api_key.
       - PROVISIONER_API_KEY=${PROVISIONER_API_KEY:-}
     env_file:
       - ../.env
@@ -185,8 +185,7 @@ services:
       - CI=true
       - DEER_FLOW_PROJECT_ROOT=/app
       - DEER_FLOW_HOME=/app/backend/.deer-flow
-      - DEER_FLOW_CONFIG_PATH=/app/project/config.yaml
-      - DEER_FLOW_EXTENSIONS_CONFIG_PATH=/app/project/extensions_config.json
+      - DEER_FLOW_CONFIG_DIR=/app/project/config
       - DEER_FLOW_STREAM_BRIDGE_REDIS_URL=${DEER_FLOW_STREAM_BRIDGE_REDIS_URL:-redis://redis:6379/0}
       - DEER_FLOW_CHANNELS_LANGGRAPH_URL=${DEER_FLOW_CHANNELS_LANGGRAPH_URL:-http://gateway:8001/api}
       - DEER_FLOW_CHANNELS_GATEWAY_URL=${DEER_FLOW_CHANNELS_GATEWAY_URL:-http://gateway:8001}
@@ -194,7 +193,7 @@ services:
       - DEER_FLOW_HOST_BASE_DIR=${DEER_FLOW_ROOT}/backend/.deer-flow
       - DEER_FLOW_HOST_SKILLS_PATH=${DEER_FLOW_ROOT}/skills
       - DEER_FLOW_SANDBOX_HOST=host.docker.internal
-      # Pass PROVISIONER_API_KEY into the gateway container so config.yaml can reference it
+      # Pass PROVISIONER_API_KEY into the gateway container so config/runtime.yaml can reference it
       # as sandbox.provisioner_api_key: $PROVISIONER_API_KEY
       - PROVISIONER_API_KEY=${PROVISIONER_API_KEY:-}
       # Proxy values (HTTP_PROXY/HTTPS_PROXY/ALL_PROXY) are inherited from ../.env via env_file.

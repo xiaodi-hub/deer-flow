@@ -1,0 +1,22 @@
+# DeerFlow MCP 与公共 Skill 状态配置
+# mcpServers 定义 MCP server。
+# skills 记录公共 skill 的启用/禁用状态。
+# 这里使用 YAML 是为了保留中文注释；UI/API 写回也会写到本文件。
+
+# MCP server 配置表，key 是 server 名称。
+# 示例：
+# mcpServers:
+#   github:
+#     enabled: false
+#     type: stdio
+#     command: npx
+#     args:
+#       - -y
+#       - "@modelcontextprotocol/server-github"
+#     env:
+#       GITHUB_TOKEN: $GITHUB_TOKEN
+#     description: GitHub MCP server for repository operations
+mcpServers: {}
+
+# 公共 skill 的启用状态；未写入的 skill 默认启用。
+skills: {}

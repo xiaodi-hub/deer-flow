@@ -1,0 +1,18 @@
+# DeerFlow 基础配置
+# 这里放全局版本、日志级别、请求 trace 关联和运行递归上限。
+# config_version 用于提醒本地配置是否落后于 config.example/。
+
+# 配置版本号；升级模板时用于提示本地配置是否需要补字段。
+config_version: 26
+
+# DeerFlow 自身日志级别：debug/info/warning/error。
+log_level: info
+
+# 请求 trace 关联日志配置，影响 X-Trace-Id、日志字段和 Langfuse deerflow_trace_id。
+logging:
+  enhance:
+    enabled: false
+    format: text
+
+# 服务端允许客户端传入的 LangGraph recursion_limit 上限，防止 runaway run。
+max_recursion_limit: 1000

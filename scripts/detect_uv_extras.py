@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve uv extras for local `uv sync` based on environment + config.yaml.
+"""Resolve uv extras for local `uv sync` based on environment + config/runtime.yaml.
 
 Order of resolution:
 1. `UV_EXTRAS` env var. Comma- or whitespace-separated names so multiple
@@ -7,7 +7,7 @@ Order of resolution:
    parsing semantics apply in the Docker dev container via
    ``docker/dev-entrypoint.sh`` and in the production Docker image build via
    ``backend/Dockerfile``.
-2. Auto-detection from config.yaml — currently maps:
+2. Auto-detection from config/runtime.yaml — currently maps:
    - database.backend == postgres        -> postgres
    - checkpointer.type == postgres       -> postgres
    - stream_bridge.type == redis         -> redis
@@ -59,13 +59,18 @@ def parse_env_extras(value: str) -> list[str]:
 
 
 def find_config_file() -> Path | None:
-    """Locate config.yaml using the same precedence as serve.sh."""
-    explicit = os.environ.get("DEER_FLOW_CONFIG_PATH")
+    """Locate config/runtime.yaml using the same precedence as serve.sh."""
+    explicit_dir = os.environ.get("DEER_FLOW_CONFIG_DIR")
+    if explicit_dir:
+        candidate = Path(explicit_dir) / "runtime.yaml"
+        if candidate.is_file():
+            return candidate
+    explicit = os.environ.get("DEER_FLOW_RUNTIME_CONFIG_PATH")
     if explicit:
         candidate = Path(explicit)
         if candidate.is_file():
             return candidate
-    for path in (Path("config.yaml"), Path("backend/config.yaml")):
+    for path in (Path("config/runtime.yaml"), Path("../config/runtime.yaml")):
         if path.is_file():
             return path
     return None

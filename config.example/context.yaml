@@ -1,0 +1,61 @@
+# DeerFlow 上下文配置
+# uploads 控制上传文件和文档转换。
+# summarization 控制长对话压缩策略。
+# memory 控制用户/agent 长期记忆的提取、存储、注入和过期审查。
+
+# 上传文件、文档转换和上传上下文注入相关配置。
+uploads:
+  max_files: 10
+  max_file_size: 52428800
+  max_total_size: 104857600
+  auto_convert_documents: false
+  pdf_converter: auto
+
+# 长上下文自动/手动摘要压缩配置。
+summarization:
+  enabled: true
+  model_name: null
+  trigger:
+  - type: tokens
+    value: 32000
+  keep:
+    type: messages
+    value: 10
+  trim_tokens_to_summarize: 15564
+  summary_prompt: null
+  skill_file_read_tool_names:
+  - read_file
+  - read
+  - view
+  - cat
+
+# 长期记忆存储、提取、注入和陈旧记忆审查配置。
+memory:
+  enabled: true
+  injection_enabled: true
+  shutdown_flush_timeout_seconds: 30.0
+  manager_class: deermem
+  mode: middleware
+  backend_config:
+    storage_path: ''
+    debounce_seconds: 30
+    model: null
+    max_facts: 100
+    fact_confidence_threshold: 0.7
+    max_injection_tokens: 2000
+    token_counting: tiktoken
+    guaranteed_categories:
+    - correction
+    guaranteed_token_budget: 500
+    staleness_review_enabled: true
+    staleness_age_days: 90
+    staleness_min_candidates: 3
+    staleness_max_removals_per_cycle: 10
+    staleness_protected_categories:
+    - correction
+    staleness_max_lifetime_multiplier: 20.0
+    staleness_max_extension_days: 3650
+    consolidation_enabled: false
+    consolidation_min_facts: 8
+    consolidation_max_groups_per_cycle: 3
+    consolidation_max_sources: 8

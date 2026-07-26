@@ -42,7 +42,7 @@ load_proxy_env_from_dotenv() {
 }
 
 detect_sandbox_mode() {
-    local config_file="$PROJECT_ROOT/config.yaml"
+    local config_file="$PROJECT_ROOT/config/runtime.yaml"
     local sandbox_use=""
     local provisioner_url=""
 
@@ -119,7 +119,7 @@ init() {
 
     SANDBOX_IMAGE="enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest"
 
-    # Detect sandbox mode from config.yaml
+    # Detect sandbox mode from config/runtime.yaml
     local sandbox_mode
     sandbox_mode="$(detect_sandbox_mode)"
 
@@ -158,7 +158,7 @@ init() {
             echo -e "${GREEN}The Docker development environment can still be started.${NC}"
             echo "If you need AIO sandbox (container-based execution):"
             echo "  - Ensure you have network access to the registry"
-            echo "  - Or configure a custom sandbox image in config.yaml"
+            echo "  - Or configure a custom sandbox image in config/runtime.yaml"
             echo ""
             echo -e "${YELLOW}Next step: make docker-start${NC}"
             return 0
@@ -226,37 +226,25 @@ start() {
         echo ""
     fi
     
-    # Ensure config.yaml exists before starting.
-    if [ ! -f "$PROJECT_ROOT/config.yaml" ]; then
-        if [ -f "$PROJECT_ROOT/config.example.yaml" ]; then
-            cp "$PROJECT_ROOT/config.example.yaml" "$PROJECT_ROOT/config.yaml"
+    # Ensure config/ exists before starting.
+    if [ ! -d "$PROJECT_ROOT/config" ]; then
+        if [ -d "$PROJECT_ROOT/config.example" ]; then
+            cp -R "$PROJECT_ROOT/config.example" "$PROJECT_ROOT/config"
             echo ""
             echo -e "${YELLOW}============================================================${NC}"
-            echo -e "${YELLOW}  config.yaml has been created from config.example.yaml.${NC}"
-            echo -e "${YELLOW}  Please edit config.yaml to set your API keys and model   ${NC}"
+            echo -e "${YELLOW}  config/ has been created from config.example/.           ${NC}"
+            echo -e "${YELLOW}  Please edit config/llm.yaml to set API keys and models.  ${NC}"
             echo -e "${YELLOW}  configuration before starting DeerFlow.                  ${NC}"
             echo -e "${YELLOW}============================================================${NC}"
             echo ""
             echo -e "${YELLOW}  Recommended: run 'make setup' before starting Docker.    ${NC}"
-            echo -e "${YELLOW}  Edit the file:  $PROJECT_ROOT/config.yaml${NC}"
+            echo -e "${YELLOW}  Edit files in:  $PROJECT_ROOT/config${NC}"
             echo -e "${YELLOW}  Then run:        make docker-start${NC}"
             echo ""
             exit 0
         else
-            echo -e "${YELLOW}✗ config.yaml not found and no config.example.yaml to copy from.${NC}"
+            echo -e "${YELLOW}✗ config/ not found and no config.example/ to copy from.${NC}"
             exit 1
-        fi
-    fi
-
-    # Ensure extensions_config.json exists as a file before mounting.
-    # Docker creates a directory when bind-mounting a non-existent host path.
-    if [ ! -f "$PROJECT_ROOT/extensions_config.json" ]; then
-        if [ -f "$PROJECT_ROOT/extensions_config.example.json" ]; then
-            cp "$PROJECT_ROOT/extensions_config.example.json" "$PROJECT_ROOT/extensions_config.json"
-            echo -e "${BLUE}Created extensions_config.json from example${NC}"
-        else
-            echo "{}" > "$PROJECT_ROOT/extensions_config.json"
-            echo -e "${BLUE}Created empty extensions_config.json${NC}"
         fi
     fi
 
@@ -355,7 +343,7 @@ help() {
     echo ""
     echo "Commands:"
     echo "  init              - Pull the sandbox image (speeds up first Pod startup)"
-    echo "  start             - Start Docker services (auto-detects sandbox mode from config.yaml)"
+    echo "  start             - Start Docker services (auto-detects sandbox mode from config/runtime.yaml)"
     echo "  restart           - Restart all running Docker services"
     echo "  logs [option] - View Docker development logs"
     echo "                  --frontend   View frontend logs only"

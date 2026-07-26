@@ -1,7 +1,7 @@
 # DeerFlow — Docker-out-of-Docker (DooD) overlay (OPT-IN, NOT loaded by default)
 #
 # Mounts the host Docker socket into the gateway container so that
-# AioSandboxProvider running in pure-Docker mode — config.yaml:
+# AioSandboxProvider running in pure-Docker mode — config/runtime.yaml:
 #   sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider
 # with NO provisioner_url — can start per-thread sandbox containers via the
 # host Docker daemon.

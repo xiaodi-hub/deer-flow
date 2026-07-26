@@ -207,6 +207,7 @@ export function isMessageGroupLoadingInCurrentTurn({
   latestHumanGroupIndex,
   lastGroupIndex,
   streamingMessages,
+  currentRunMessageIdentities,
 }: {
   group: MessageGroup;
   groupIndex: number;
@@ -214,17 +215,30 @@ export function isMessageGroupLoadingInCurrentTurn({
   latestHumanGroupIndex: number;
   lastGroupIndex: number;
   streamingMessages: StreamingMessageLookup;
+  currentRunMessageIdentities?: ReadonlySet<string>;
 }) {
   if (!isThreadLoading) {
     return false;
   }
+
+  if (isAssistantMessageGroupStreaming(group.messages, streamingMessages)) {
+    return true;
+  }
+
+  if (currentRunMessageIdentities !== undefined) {
+    return group.messages.some((message) => {
+      const identity = getMessageIdentity(message);
+      return identity ? currentRunMessageIdentities.has(identity) : false;
+    });
+  }
+
   if (groupIndex === lastGroupIndex) {
     return true;
   }
   if (latestHumanGroupIndex !== -1 && groupIndex > latestHumanGroupIndex) {
     return true;
   }
-  return isAssistantMessageGroupStreaming(group.messages, streamingMessages);
+  return false;
 }
 
 export function groupMessages<T>(
@@ -279,6 +293,20 @@ export type StreamingMessageLookup = {
   ids: ReadonlySet<string>;
   messages: ReadonlySet<Message>;
 };
+
+export function getMessageIdentity(message: Message): string | undefined {
+  if (
+    "tool_call_id" in message &&
+    typeof message.tool_call_id === "string" &&
+    message.tool_call_id.length > 0
+  ) {
+    return `tool:${message.tool_call_id}`;
+  }
+  if (typeof message.id === "string" && message.id.length > 0) {
+    return `message:${message.id}`;
+  }
+  return undefined;
+}
 
 export function getStreamingMessageLookup(
   messages: Message[],

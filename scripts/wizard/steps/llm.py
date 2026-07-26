@@ -61,7 +61,7 @@ def run_llm_step(step_label: str = "Step 1/3") -> LLMStepResult:
         )
         provider = with_thinking_support(provider, supports_thinking)
         if supports_thinking:
-            print_info("Thinking enabled. Adjust the toggle in config.yaml if your gateway uses a different mechanism.")
+            print_info("Thinking enabled. Adjust the toggle in config/llm.yaml if your gateway uses a different mechanism.")
 
     if provider.auth_hint:
         print_header(f"{step_label} · Authentication")

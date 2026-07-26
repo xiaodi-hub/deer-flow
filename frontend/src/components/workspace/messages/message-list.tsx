@@ -49,6 +49,7 @@ import {
   getAssistantTurnUsageMessages,
   getBranchableAssistantGroupIds,
   getLatestHumanGroupIndex,
+  getMessageIdentity,
   getMessageGroups,
   getStreamingMessageLookup,
   hasContent,
@@ -58,7 +59,6 @@ import {
   isHiddenFromUIMessage,
   isMessageGroupLoadingInCurrentTurn,
 } from "@/core/messages/utils";
-import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import {
   buildMessageSidecarContext,
   type SidecarContext,
@@ -218,6 +218,7 @@ export function MessageList({
   testId,
   threadId,
   thread,
+  pendingMessages,
   paddingBottom = MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
   tokenUsageInlineMode = "off",
   hasMoreHistory,
@@ -237,6 +238,7 @@ export function MessageList({
   testId?: string;
   threadId: string;
   thread: BaseStream<AgentThreadState>;
+  pendingMessages?: readonly Message[];
   paddingBottom?: number;
   tokenUsageInlineMode?: TokenUsageInlineMode;
   hasMoreHistory?: boolean;
@@ -295,7 +297,6 @@ export function MessageList({
       .slice(latestHumanGroupIndex + 1)
       .some((g) => g.type === "assistant");
   }, [groupedMessages, latestHumanGroupIndex]);
-  const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
   const lastGroupIndex = groupedMessages.length - 1;
   const turnUsageMessagesByGroupIndex =
@@ -313,6 +314,16 @@ export function MessageList({
       ),
     [messages, thread.getMessagesMetadata, thread.isLoading],
   );
+  const currentRunMessageIdentities = useMemo(() => {
+    if (!thread.isLoading || !pendingMessages) {
+      return undefined;
+    }
+    return new Set(
+      pendingMessages
+        .map(getMessageIdentity)
+        .filter((identity): identity is string => Boolean(identity)),
+    );
+  }, [pendingMessages, thread.isLoading]);
 
   const humanInputState = useMemo(
     () =>
@@ -726,6 +737,7 @@ export function MessageList({
               latestHumanGroupIndex,
               lastGroupIndex,
               streamingMessages,
+              currentRunMessageIdentities,
             });
 
             if (group.type === "human" || group.type === "assistant") {
@@ -850,7 +862,6 @@ export function MessageList({
                     <MarkdownContent
                       content={extractContentFromMessage(message)}
                       isLoading={groupIsLoading}
-                      rehypePlugins={rehypePlugins}
                     />
                     {renderTokenUsage({
                       messages: group.messages,
@@ -874,7 +885,6 @@ export function MessageList({
                     <MarkdownContent
                       content={extractContentFromMessage(group.messages[0])}
                       isLoading={groupIsLoading}
-                      rehypePlugins={rehypePlugins}
                       className="mb-4"
                     />
                   )}

@@ -20,8 +20,8 @@ DeerFlow is a LangGraph-based AI super agent system with a full-stack architectu
 ```
 deer-flow/
 ├── Makefile                    # Root commands (check, install, dev, stop)
-├── config.yaml                 # Main application configuration
-├── extensions_config.json      # MCP servers and skills configuration
+├── config/                     # Split runtime configuration (gitignored)
+├── config.example/             # Split runtime configuration template
 ├── backend/                    # Backend application (this directory)
 │   ├── Makefile               # Backend-only commands (dev, gateway, lint)
 │   ├── langgraph.json         # LangGraph Studio graph configuration
@@ -82,7 +82,7 @@ When making code changes, you MUST update the relevant documentation:
 ```bash
 make check      # Check system requirements
 make install    # Install all dependencies (frontend + backend)
-make dev        # Start all services (Gateway + Frontend + Nginx), with config.yaml preflight
+make dev        # Start all services (Gateway + Frontend + Nginx), with config/ preflight
 make start      # Start production services locally
 make stop       # Stop all services
 ```
@@ -123,7 +123,7 @@ deterministic scope step before routing each candidate to a fix and/or a
 `tests/blocking_io/` runtime anchor.
 
 Regression tests related to Docker/provisioner behavior:
-- `tests/test_docker_sandbox_mode_detection.py` (mode detection from `config.yaml`)
+- `tests/test_docker_sandbox_mode_detection.py` (mode detection from `config/runtime.yaml`)
 - `tests/test_provisioner_kubeconfig.py` (kubeconfig file/directory handling)
 - `tests/test_provisioner_request_threading.py` (keeps provisioner sandbox CRUD
   endpoints as sync FastAPI handlers so synchronous K8s client calls run in the
@@ -269,15 +269,15 @@ Before changing a later authorization phase, read the [authorization RFC](../doc
 
 ### Configuration System
 
-**Main Configuration** (`config.yaml`):
+**Main Configuration** (`config/`):
 
-Setup: Copy `config.example.yaml` to `config.yaml` in the **project root** directory.
+Setup: copy `config.example/` to `config/` in the **project root** directory, or run `make config` / `make setup`.
 
-**Config Versioning**: `config.example.yaml` has a `config_version` field. On startup, `AppConfig.from_file()` compares user version vs example version and emits a warning if outdated. Missing `config_version` = version 0. Run `make config-upgrade` to auto-merge missing fields. When changing the config schema, bump `config_version` in `config.example.yaml`.
+**Config Versioning**: `config.example/app.yaml` has a `config_version` field. On startup, `AppConfig.from_file()` compares user version vs example version and emits a warning if outdated. Missing `config_version` = version 0. Run `make config-upgrade` to auto-merge missing fields. When changing the global config schema, bump `config_version` in `config.example/app.yaml`.
 
-**Config Caching**: `get_app_config()` caches the parsed config, but automatically reloads it when the resolved config path or file content signature changes. The signature includes file metadata and a content digest, so Gateway and LangGraph reads stay aligned with `config.yaml` edits even on object-store or network mounts where mtime can remain stale.
+**Config Caching**: `get_app_config()` caches the merged config directory, but automatically reloads it when the resolved config directory or any YAML file content signature changes. The signature includes per-file metadata and content digests, so Gateway and LangGraph reads stay aligned with `config/` edits even on object-store or network mounts where mtime can remain stale.
 
-**Config Hot-Reload Boundary**: Gateway dependencies route through `get_app_config()` on every request, so per-run fields like `models[*].max_tokens`, `summarization.*`, `title.*`, `memory.*`, `subagents.*`, `tools[*]`, and the agent system prompt pick up `config.yaml` edits on the next message. `AppConfig` is intentionally **not** cached on `app.state` — `lifespan()` keeps a local `startup_config` variable for one-shot bootstrap work and passes it to `langgraph_runtime(app, startup_config)`.
+**Config Hot-Reload Boundary**: Gateway dependencies route through `get_app_config()` on every request, so per-run fields like `models[*].max_tokens`, `summarization.*`, `title.*`, `memory.*`, `subagents.*`, `tools[*]`, and the agent system prompt pick up `config/` edits on the next message. `AppConfig` is intentionally **not** cached on `app.state` — `lifespan()` keeps a local `startup_config` variable for one-shot bootstrap work and passes it to `langgraph_runtime(app, startup_config)`.
 
 Infrastructure fields are **restart-required**. The authoritative list lives in `packages/harness/deerflow/config/reload_boundary.py::STARTUP_ONLY_FIELDS` and is mirrored by the standardised `"startup-only:"` prefix on the corresponding `Field(description=...)` in `AppConfig`, so IDE hover on those fields surfaces the reason inline (no need to context-switch into this table). Currently registered: `database`, `checkpointer`, `run_events`, `stream_bridge`, `sandbox`, `log_level`, `logging`, `channels`, `channel_connections`, `scheduler`, `run_ownership`. Adding a new restart-required field requires updating the registry; drift is pinned by `tests/test_reload_boundary.py`.
 
@@ -288,28 +288,26 @@ present, overrides `database` for the LangGraph checkpointer and Store only;
 application repositories continue to use `database`.
 
 Configuration priority:
-1. Explicit `config_path` argument
-2. `DEER_FLOW_CONFIG_PATH` environment variable
-3. `config.yaml` in current directory (backend/)
-4. `config.yaml` in parent directory (project root - **recommended location**)
+1. Explicit config directory argument
+2. `DEER_FLOW_CONFIG_DIR` environment variable
+3. `config/` in the project root
 
 Config values starting with `$` are resolved as environment variables (e.g., `$OPENAI_API_KEY`).
 `ModelConfig` also declares `use_responses_api` and `output_version` so OpenAI `/v1/responses` can be enabled explicitly while still using `langchain_openai:ChatOpenAI`.
 
-**Extensions Configuration** (`extensions_config.json`):
+**Extensions Configuration** (`config/mcp.yaml`):
 
-MCP servers and skills are configured together in `extensions_config.json` in project root:
+MCP servers and public skill enabled state are configured together in `config/mcp.yaml`:
 
 Docker development mounts the project directory at `/app/project` and points
-`DEER_FLOW_CONFIG_PATH` / `DEER_FLOW_EXTENSIONS_CONFIG_PATH` into that directory.
-Keep mutable config files behind a directory bind mount: single-file bind mounts
-can become stale or inaccessible when a host editor replaces a file on save.
+`DEER_FLOW_CONFIG_DIR` at `/app/project/config`. Keeping mutable config behind a
+directory bind mount avoids stale single-file mount behavior when host editors replace
+files on save.
 
 Configuration priority:
 1. Explicit `config_path` argument
-2. `DEER_FLOW_EXTENSIONS_CONFIG_PATH` environment variable
-3. `extensions_config.json` in current directory (backend/)
-4. `extensions_config.json` in parent directory (project root - **recommended location**)
+2. `DEER_FLOW_MCP_CONFIG_PATH` environment variable
+3. `config/mcp.yaml` in the project root
 
 ### Gateway API (`app/gateway/`)
 
@@ -324,7 +322,7 @@ CORS is same-origin by default when requests enter through nginx on port 2026. S
 | **Models** (`/api/models`) | `GET /` - list models; `GET /{name}` - model details |
 | **Features** (`/api/features`) | `GET /` - report config-gated feature availability (currently `agents_api.enabled`) for frontend UI gating |
 | **Console** (`/api/console`) | Read-only cross-thread observability for the current user (the data layer for an operations dashboard or external monitoring): `GET /stats` - headline counters (runs/threads/agents/tokens/cost); `GET /runs` - paginated run history joined with thread titles (per-run cost); `GET /usage` - zero-filled daily token series + per-model breakdown with spend. Queries `runs`/`threads_meta` directly as a reporting layer (no new `RunStore` methods); requires a SQL database backend — returns 503 on `database.backend: memory`. Real-cost estimation reads optional `models[*].pricing` (`currency`, `input_per_million`, `output_per_million`, `input_cache_hit_per_million`; `ModelConfig` is `extra="allow"`, so no schema change) and prices each run from its `token_usage_by_model` input/output split. Pricing is **cache-aware**: `RunJournal` accumulates prompt-cache hits from `usage_metadata.input_token_details.cache_read` into a sparse `cache_read_tokens` bucket key (also threaded through `SubagentTokenCollector` → `record_external_llm_usage_records`), and cache-hit input tokens are billed at `input_cache_hit_per_million` (omitted → billed at the miss price, a conservative upper bound). Legacy rows fall back to run-level totals at `model_name`; unpriced models yield `cost: null` and cost fields are null when no pricing is configured |
-| **MCP** (`/api/mcp`) | `GET /config` - get config; `PUT /config` - update config (saves to extensions_config.json) |
+| **MCP** (`/api/mcp`) | `GET /config` - get config; `PUT /config` - update config (saves to `config/mcp.yaml`) |
 | **Skills** (`/api/skills`) | `GET /` - list skills; `GET /{name}` - details; `PUT /{name}` - update enabled; `POST /install` - install from .skill archive (accepts standard optional frontmatter like `version`, `author`, `compatibility`); `POST /reload` - admin-only process-local prompt-cache invalidation after trusted external filesystem changes |
 | **Memory** (`/api/memory`) | `GET /` - memory data; `POST /reload` - force reload; `GET /config` - config; `GET /status` - config + data |
 | **Uploads** (`/api/threads/{id}/uploads`) | `POST /` - upload files (auto-converts PDF/PPT/Excel/Word); `GET /list` - list; `DELETE /{filename}` - delete |
@@ -405,7 +403,7 @@ Proxied through nginx: `/api/langgraph/*` → Gateway LangGraph-compatible runti
 ### Tool System (`packages/harness/deerflow/tools/`)
 
 `get_available_tools(groups, include_mcp, model_name, subagent_enabled)` assembles:
-1. **Config-defined tools** - Resolved from `config.yaml` via `resolve_variable()`
+1. **Config-defined tools** - Resolved from `config/tool.yaml` via `resolve_variable()`
 2. **MCP tools** - From enabled MCP servers (lazy initialized, cached with resolved-path + content-signature invalidation)
 3. **Built-in tools**:
    - `present_files` - Make output files visible to user (only `/mnt/user-data/outputs`)
@@ -419,7 +417,7 @@ Proxied through nginx: `/api/langgraph/*` → Gateway LangGraph-compatible runti
 Scheduled-task runtime note:
 - Scheduled background runs set `context.non_interactive=true` and therefore exclude `ask_clarification` from the lead-agent tool list. This keeps scheduler-triggered runs from stalling on human confirmation mid-execution. `non_interactive` is an internal-only context key: it is merged from `body.context` only when the request authenticated as the process-internal user (the scheduler path), never from arbitrary HTTP/IM clients.
 
-**Community tools** (`packages/harness/deerflow/community/`): optional integrations, each in its own subpackage and wired through `config.yaml`. Documented examples:
+**Community tools** (`packages/harness/deerflow/community/`): optional integrations, each in its own subpackage and wired through `config/tool.yaml`. Documented examples:
 - `tavily/` - Web search (5 results default) and web fetch (4KB limit)
 - `jina_ai/` - Web fetch via Jina reader API with readability extraction
 - `firecrawl/` - Web scraping via Firecrawl API
@@ -429,7 +427,7 @@ Scheduled-task runtime note:
 Additional providers also live here (`boxlite`, `brave`, `browserless`, `crawl4ai`, `ddg_search`, `e2b_sandbox`, `exa`, `fastcrw`, `groundroute`, `infoquest`, `searxng`, `serper`); see each subpackage for specifics.
 
 **ACP agent tools**:
-- `invoke_acp_agent` - Invokes external ACP-compatible agents from `config.yaml`
+- `invoke_acp_agent` - Invokes external ACP-compatible agents from `config/agent.yaml`
 - ACP launchers must be real ACP adapters. The standard `codex` CLI is not ACP-compatible by itself; configure a wrapper such as `npx -y @zed-industries/codex-acp` or an installed `codex-acp` binary
 - Missing ACP executables now return an actionable error message instead of a raw `[Errno 2]`
 - Each ACP agent uses a per-thread workspace at `{base_dir}/users/{user_id}/threads/{thread_id}/acp-workspace/`. The workspace is accessible to the lead agent via the virtual path `/mnt/acp-workspace/` (read-only). In docker sandbox mode, the directory is volume-mounted into the container at `/mnt/acp-workspace` (read-only); in local sandbox mode, path translation is handled by `tools.py`
@@ -441,7 +439,7 @@ Additional providers also live here (`boxlite`, `brave`, `browserless`, `crawl4a
 - **Cache invalidation**: Detects extensions-config changes by comparing the resolved config path and a `(mtime, size, sha256)` content signature against the values recorded at initialization (mirrors `config/app_config.py::get_app_config()`), not a strict mtime `>` comparison. This catches same-second edits, mtime that stays put or moves backward (`git checkout`, `cp -p` / backup restore, `tar` / `rsync`, object-store / network mounts), and a switch to a different config file with an equal-or-older mtime
 - **Transports**: stdio (command-based), SSE, HTTP
 - **OAuth (HTTP/SSE)**: Supports token endpoint flows (`client_credentials`, `refresh_token`) with automatic token refresh + Authorization header injection
-- **Routing hints**: `extensions_config.json -> mcpServers.<server>.routing` and
+- **Routing hints**: `config/mcp.yaml -> mcpServers.<server>.routing` and
   `tools.<original_tool_name>.routing` are soft preference metadata. The effective
   routing is resolved while `mcp/tools.py::get_mcp_tools()` still has both
   `source_name` and the original MCP tool name, then stored on `tool.metadata`
@@ -451,13 +449,13 @@ Additional providers also live here (`boxlite`, `brave`, `browserless`, `crawl4a
   add a parallel routing middleware for PR1-style preference hints.
 - **Stdio file outputs**: Persistent stdio sessions are scoped by `user_id:thread_id`. For stdio transports only, DeerFlow pins the subprocess default `cwd` to the thread workspace and `TMPDIR`/`TMP`/`TEMP` to `workspace/.mcp/tmp/`, unless the operator explicitly configured `cwd` or temp env values. SSE/HTTP transports skip this filesystem prep entirely.
 - **Stdio path translation**: MCP-returned local file references are not copied. If a `ResourceLink` or conservative free-text path resolves to an existing file inside the thread's mounted user-data tree, it is translated deterministically to `/mnt/user-data/...`; paths outside that tree remain unchanged.
-- **Runtime updates**: Gateway API saves to extensions_config.json; the Gateway-embedded runtime detects changes via the resolved-path + content-signature check above, so multi-worker / stale-mtime deployments still pick up an added/removed MCP server without a restart (the `PUT /api/mcp/config` reset only clears the cache in its own worker)
+- **Runtime updates**: Gateway API saves to `config/mcp.yaml`; the Gateway-embedded runtime detects changes via the resolved-path + content-signature check above, so multi-worker / stale-mtime deployments still pick up an added/removed MCP server without a restart (the `PUT /api/mcp/config` reset only clears the cache in its own worker)
 
 ### Skills System (`packages/harness/deerflow/skills/`)
 
 - **Location**: `deer-flow/skills/{public,custom}/`
 - **Format**: Directory with `SKILL.md` (YAML frontmatter: name, description, license, allowed-tools, required-secrets)
-- **Loading**: `load_skills()` recursively scans namespace directories under `skills/{public,custom}`, but stops descending once it finds a `SKILL.md`; that directory is a package boundary, so no nested `SKILL.md` is registered as a runtime skill. SkillScan has a deliberately narrower packaging rule: known eval fixtures are permitted as support data, while other nested `SKILL.md` files are reported as package defects. It parses runtime metadata and reads enabled state from extensions_config.json.
+- **Loading**: `load_skills()` recursively scans namespace directories under `skills/{public,custom}`, but stops descending once it finds a `SKILL.md`; that directory is a package boundary, so no nested `SKILL.md` is registered as a runtime skill. SkillScan has a deliberately narrower packaging rule: known eval fixtures are permitted as support data, while other nested `SKILL.md` files are reported as package defects. It parses runtime metadata and reads enabled state from `config/mcp.yaml`.
 - **External reload**: `POST /api/skills/reload` is an admin-only, process-local invalidation hook for trusted MinIO/NFS/CSI writes. `SkillStorage` instances do not cache a catalog — `load_skills()` scans on every call — so the route clears all `(app_config, user_id)` entries and the rendered prompt-section LRU, then waits up to the shared refresh timeout for the existing off-loop single-flight refresh. Each invalidation receives a generation-bound result handle; a successful scan atomically replaces the global enabled-skills cache, while a loader-level failure propagates to the HTTP waiter and preserves the last-known-good global cache. Per-user/config scans capture the refresh version and cannot repopulate shared caches if invalidation occurs while they are loading. A timed-out HTTP wait fails generically while the daemon refresh worker continues. Subsequent runs rescan after a successful reload; active runs keep their existing snapshot. Each Uvicorn worker/Kubernetes Pod must be targeted separately. Direct mount writes bypass install/edit validation, SkillScan, and history, so mounted roots are an operator-controlled trust boundary.
 - **Tool policy**: Lead-agent `allowed-tools` declarations apply dynamically only to slash-activated skills and skills captured in `ThreadState.skill_context` through configured `read_file` loads; passive enabled skills and custom-agent skill allowlists remain discoverable without clamping the global toolset. Slash policy is dominant for its run, preventing subsequently read skills from widening explicit authority; autonomous captured skills use the existing union only when no slash source exists. `tool_search` and `describe_skill` stay available as framework discovery infrastructure, while every discovered or promoted business tool still requires active-policy permission for schema visibility and execution; `task` likewise requires an explicit declaration. Each active model call intentionally reloads the full live registry so enable/disable changes, frontmatter edits, and custom/public name-shadow winners take effect without a stale TTL or unsafe direct-path cache; all tool calls produced by that model step reuse the resulting source-and-path-signed decision. Registry failures and all-invalid active sets fail closed, while stale individual paths are skipped when another valid skill remains. This is best-effort behavioral scoping, not a hard security boundary: alternate loading paths are not captured and bounded autonomous context may evict entries. Subagents still filter statically because their configured skills are all loaded into the session at startup.
 - **Injection (legacy / default)**: Enabled skills are listed in the agent system prompt with full metadata and container paths (`<available_skills>` block). Controlled by `skills.deferred_discovery: false` (default).
@@ -508,7 +506,7 @@ Bridges external messaging platforms (Feishu, Slack, Telegram, Discord, DingTalk
 - `store.py` - JSON-file persistence mapping `channel_name:chat_id[:topic_id]` → `thread_id` (keys are `channel:chat` for root conversations and `channel:chat:topic` for threaded conversations)
 - `manager.py` - Core dispatcher: creates threads via `client.threads.create()`, routes commands including `/goal` (setting a goal persists it through Gateway and then routes the objective as a chat turn), keeps Slack/Discord on `client.runs.wait()`, uses `client.runs.stream(["messages-tuple", "values"])` for Feishu/Telegram incremental outbound updates, serializes same-thread Feishu turns in-manager when the channel's `ChannelRunPolicy.serialize_thread_runs=True` so rapid follow-ups queue instead of tripping the runtime busy reply, and switches to `client.runs.create()` (fire-and-forget, returns once the run is `pending`) for channels whose `ChannelRunPolicy.fire_and_forget=True` so long autonomous runs do not hit the SDK default 300s `httpx.ReadTimeout`
 - `base.py` - Abstract `Channel` base class (start/stop/send lifecycle)
-- `service.py` - Manages lifecycle of all configured channels from `config.yaml`
+- `service.py` - Manages lifecycle of all configured channels from `config/agent.yaml`
 - `slack.py` / `feishu.py` / `telegram.py` / `discord.py` / `dingtalk.py` - Platform-specific implementations (`feishu.py` tracks the running card `message_id` in memory and patches the same card in place; `telegram.py` registers the "Working on it..." placeholder as the stream target and edits it in place via `editMessageText`; `dingtalk.py` optionally uses AI Card streaming for in-place updates when `card_template_id` is configured)
 - `github.py` - Webhook-driven GitHub channel. Inbound messages come from `POST /api/webhooks/github`; outbound is log-only because GitHub agents post explicitly with `gh` from their sandbox when they choose to comment or create a PR
 - `app/gateway/routers/channel_connections.py` - Browser-facing user connection and disconnect APIs
@@ -536,13 +534,13 @@ Bridges external messaging platforms (Feishu, Slack, Telegram, Discord, DingTalk
 - `_resolve_attachments` / `_prepare_artifact_delivery` — resolve output artifacts from the bound owner's bucket
 The cached value is reused for both the blocking (`runs.wait`) and streaming (`_handle_streaming_chat`) paths, so uploads and artifact delivery always target the same bucket even if a channel returns a rewritten `InboundMessage` from `receive_file`. The bucket id matches the memory bucket resolved by `_resolve_memory_user_id` (both normalize through `make_safe_user_id`).
 
-**Configuration** (`config.yaml` -> `channels`):
+**Configuration** (`config/agent.yaml` -> `channels`):
 - `langgraph_url` - LangGraph-compatible Gateway API base URL (default: `http://localhost:8001/api`)
 - `gateway_url` - Gateway API URL for auxiliary commands (default: `http://localhost:8001`)
 - In Docker Compose, IM channels run inside the `gateway` container, so `localhost` points back to that container. Use `http://gateway:8001/api` for `langgraph_url` and `http://gateway:8001` for `gateway_url`, or set `DEER_FLOW_CHANNELS_LANGGRAPH_URL` / `DEER_FLOW_CHANNELS_GATEWAY_URL`.
 - Per-channel configs: `feishu` (app_id, app_secret), `slack` (bot_token, app_token), `telegram` (bot_token), `dingtalk` (client_id, client_secret, optional `card_template_id` for AI Card streaming), `github` (operator kill-switch `enabled`, plus `default_mention_login` for mention-required GitHub triggers)
 
-**User-owned channel connections** (`config.yaml` -> `channel_connections`):
+**User-owned channel connections** (`config/agent.yaml` -> `channel_connections`):
 - Disabled by default. It is a user-binding layer on top of the existing `channels.*` runtime config, not a replacement for provider bot credentials.
 - No public IP, OAuth callback URL, or provider webhook route is required by the current implementation.
 - Telegram uses a deep-link `/start <code>` flow over the existing long-polling worker. Slack, Discord, Feishu/Lark, DingTalk, WeChat, and WeCom use `/connect <code>` over their existing outbound channel workers.
@@ -608,7 +606,7 @@ The cached value is reused for both the blocking (`runs.wait`) and streaming (`_
 
 Focused regression coverage for the updater lives in `backend/tests/test_memory_updater.py`.
 
-**Configuration** (`config.yaml` → `memory`):
+**Configuration** (`config/context.yaml` → `memory`):
 - `enabled` / `injection_enabled` - Master switches
 - `mode` - Operation mode: `middleware` (default passive background extraction) or `tool` (experimental model-driven memory tools). Modes are mutually exclusive.
 - `storage_path` - Path to memory.json (absolute path opts out of per-user isolation)
@@ -702,7 +700,7 @@ and `TraceMiddleware` captures `logging.enhance.enabled` once when the FastAPI a
 is constructed (via `resolve_trace_enabled(get_app_config())` in `create_app()`,
 itself a thin alias for `is_trace_correlation_enabled`). This keeps the response
 `X-Trace-Id` header, log `trace_id` fields, and Langfuse `deerflow_trace_id`
-coherent — a runtime `config.yaml` edit to `logging.enhance.*` needs a Gateway
+coherent — a runtime `config/app.yaml` edit to `logging.enhance.*` needs a Gateway
 restart to take effect. The `deerflow_trace_id` chain inherits this guarantee
 transitively because every injection point ultimately reads the same
 `trace_context` ContextVar that the middleware alone populates. `DeerFlowClient`
@@ -740,26 +738,28 @@ Config is env-driven like the others — `MonocleTracingConfig`, built in `get_t
 
 ### Config Schema
 
-**`config.yaml`** key sections:
-- `models[]` - LLM configs with `use` class path, `supports_thinking`, `supports_vision`, provider-specific fields
-- `logging.enhance` - Optional request trace correlation (`enabled`, `format`) for Gateway `X-Trace-Id`, log `trace_id`, and Langfuse `deerflow_trace_id`
-- vLLM reasoning models should use `deerflow.models.vllm_provider:VllmChatModel`; for Qwen-style parsers prefer `when_thinking_enabled.extra_body.chat_template_kwargs.enable_thinking`, and DeerFlow will also normalize the older `thinking` alias
-- `tools[]` - Tool configs with `use` variable path and `group`
-- `tool_groups[]` - Logical groupings for tools
-- `sandbox.use` - Sandbox provider class path
-- `skills.path` / `skills.container_path` - Host and container paths to skills directory
-- `skills.deferred_discovery` - When `true`, replaces the full-metadata `<available_skills>` prompt block with a compact `<skill_index>` (names only) and registers the `describe_skill` tool so the agent fetches metadata on demand. Defaults to `false` (legacy full-metadata injection)
-- `title` - Auto-title generation (enabled, max_words, max_chars, model_name; null model_name uses fast local fallback, explicit model_name uses the prompt_template LLM path)
-- `summarization` - Context summarization (enabled, trigger conditions, keep policy)
-- `subagents.enabled` - Master switch for subagent delegation
-- `memory` - Memory system (enabled, storage_path, debounce_seconds, shutdown_flush_timeout_seconds, model_name, max_facts, fact_confidence_threshold, injection_enabled, max_injection_tokens, staleness_review_enabled, staleness_age_days, staleness_min_candidates, staleness_max_removals_per_cycle, staleness_protected_categories, staleness_max_lifetime_multiplier, staleness_max_extension_days)
+Global runtime config is split under the repo-root `config/` directory. `AppConfig`
+loads every app config YAML in a fixed order and validates the merged mapping against
+the same Pydantic schema. Set `DEER_FLOW_CONFIG_DIR` to point at another config
+directory; otherwise the project-root `config/` is used.
 
-**`extensions_config.json`**:
-- `mcpServers` - Map of server name → config (enabled, type, command, args, env, url, headers, oauth, description, `routing`, `tools`, `tool_call_timeout`). `routing.mode="prefer"` emits `<mcp_routing_hints>` prompt guidance; if `tool_search` defers the hinted tool, `McpRoutingMiddleware` can also auto-promote matching deferred schemas before the model call. It does not hard-disable other tools.
-- `tool_search.auto_promote_top_k` - Global MCP routing auto-promote breadth. Default `3`, clamped to `1..5`; applies only when `tool_search.enabled=true` and only to deferred MCP tools with `routing.mode="prefer"` and non-empty keywords. For lead agents the deferred catalog is built from the full configured MCP set; auto-promotion never grants authority because an active skill's runtime policy still filters model-visible schemas, `tool_search` results, and execution.
-- `skills` - Map of skill name → state (enabled)
+Key files:
+- `config/app.yaml` - `config_version`, `log_level`, `logging.enhance`, `max_recursion_limit`
+- `config/llm.yaml` - `models[]`
+- `config/token.yaml` - `token_usage`, `token_budget`
+- `config/context.yaml` - `uploads`, `summarization`, `memory`
+- `config/prompt.yaml` - `title`, `input_polish`, `suggestions`, `safety_finish_reason`
+- `config/tool.yaml` - `tools[]`, `tool_groups[]`, `tool_search`, `tool_output`, `tool_progress`, `loop_detection`, `read_before_write`, `guardrails`
+- `config/agent.yaml` - `agents_api`, `acp_agents`, `subagents`, `channel_connections`, `channels`
+- `config/skill.yaml` - `skills`, `skill_scan`, `skill_evolution`
+- `config/runtime.yaml` - `sandbox`, `database`, `checkpointer`, `run_events`, `scheduler`, `stream_bridge`, `run_ownership`
+- `config/security.yaml` - `auth`, `authorization`, `circuit_breaker`
+- `config/mcp.yaml` - MCP servers and public skill enabled state. This file is loaded by `ExtensionsConfig`, not merged into `AppConfig`.
 
-Both can be modified at runtime via Gateway API endpoints or `DeerFlowClient` methods.
+`config.example/` is the committed template with Chinese comments. Run `make config`
+to create a local `config/` directory or `make config-upgrade` to merge missing fields
+from the template. Gateway MCP and public-skill update APIs write back to
+`config/mcp.yaml`.
 
 ### Embedded Client (`packages/harness/deerflow/client.py`)
 
@@ -793,7 +793,7 @@ Both can be modified at runtime via Gateway API endpoints or `DeerFlowClient` me
 
 **Key difference from Gateway**: Upload accepts local `Path` objects instead of HTTP `UploadFile`, rejects directory paths before copying, and reuses a single worker when document conversion must run inside an active event loop. Artifact returns `(bytes, mime_type)` instead of HTTP Response. The new Gateway-only thread cleanup route deletes `.deer-flow/threads/{thread_id}` after LangGraph thread deletion; there is no matching `DeerFlowClient` method yet. `update_mcp_config()` and `update_skill()` automatically invalidate the cached agent.
 
-**Tests**: `tests/test_client.py` (77 unit tests including `TestGatewayConformance`), `tests/test_client_live.py` (live integration tests, requires config.yaml)
+**Tests**: `tests/test_client.py` (77 unit tests including `TestGatewayConformance`), `tests/test_client_live.py` (live integration tests, requires config/)
 
 **Gateway Conformance Tests** (`TestGatewayConformance`): Validate that every dict-returning client method conforms to the corresponding Gateway Pydantic response model. Each test parses the client output through the Gateway model — if Gateway adds a required field that the client doesn't provide, Pydantic raises `ValidationError` and CI catches the drift. Covers: `ModelsListResponse`, `ModelResponse`, `SkillsListResponse`, `SkillResponse`, `SkillInstallResponse`, `McpConfigResponse`, `UploadResponse`, `MemoryConfigResponse`, `MemoryStatusResponse`.
 
@@ -892,7 +892,7 @@ See [docs/plan_mode_usage.md](docs/plan_mode_usage.md) for details.
 ### Context Summarization
 
 Automatic conversation summarization when approaching token limits:
-- Configured in `config.yaml` under `summarization` key
+- Configured in `config/context.yaml` under `summarization` key
 - Trigger types: tokens, messages, or fraction of max input
 - Keeps recent messages while summarizing older ones
 - Manual compaction uses `POST /api/threads/{id}/compact`, reuses the same

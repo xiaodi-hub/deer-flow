@@ -1,0 +1,38 @@
+# DeerFlow 运行时配置
+# sandbox 控制执行沙箱。
+# database/checkpointer/run_events 控制持久化。
+# scheduler/run_ownership/stream_bridge 控制后台调度、多 worker 运行归属和流式事件桥。
+
+# 沙箱 provider、镜像、路径挂载和安全策略配置。
+sandbox:
+  use: deerflow.sandbox.local:LocalSandboxProvider
+  allow_host_bash: false
+  bash_output_max_chars: 20000
+  read_file_output_max_chars: 50000
+  ls_output_max_chars: 20000
+  bash_command_timeout: 600
+
+# 统一数据库配置；控制 checkpointer、run、thread、user 等持久化后端。
+database:
+  backend: sqlite
+  sqlite_dir: .deer-flow/data
+
+# run 事件存储配置，控制执行轨迹和消息事件持久化。
+run_events:
+  backend: memory
+  max_trace_content: 10240
+  track_token_usage: true
+
+# 计划任务后台调度器配置，Gateway 启动时读取。
+scheduler:
+  enabled: false
+  poll_interval_seconds: 5
+  lease_seconds: 120
+  max_concurrent_runs: 3
+  min_once_delay_seconds: 60
+
+# 多 worker run 租约、心跳和孤儿恢复配置。
+run_ownership:
+  lease_seconds: 30
+  grace_seconds: 10
+  heartbeat_enabled: false

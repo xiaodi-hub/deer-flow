@@ -1,11 +1,11 @@
 import asyncio
-import json
 import logging
 import os
 import re
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,7 +16,7 @@ from deerflow.mcp.cache import reset_mcp_tools_cache
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["mcp"])
 
-# Serializes the read-modify-write of extensions_config.json within this worker
+# Serializes the read-modify-write of config/mcp.yaml within this worker
 # process. Offloading the RMW to a thread removed the implicit serialization the
 # single-threaded event loop used to provide, so two concurrent
 # PUT /api/mcp/config calls could otherwise interleave and clobber each other.
@@ -340,7 +340,7 @@ async def get_mcp_configuration(request: Request) -> McpConfigResponse:
 def _apply_mcp_config_update(body: McpConfigUpdateRequest) -> dict:
     """Worker-thread body for :func:`update_mcp_configuration`.
 
-    Resolving the config path, the existence probe, reading the raw JSON,
+    Resolving the config path, the existence probe, reading the raw YAML,
     writing the merged config, and reloading it are all blocking filesystem IO
     that must stay off the event loop. The merge is pure in-memory work but
     lives here too so the whole read-modify-write is a single worker hop.
@@ -349,22 +349,25 @@ def _apply_mcp_config_update(body: McpConfigUpdateRequest) -> dict:
     # Get the current config path (or determine where to save it)
     config_path = ExtensionsConfig.resolve_config_path()
 
-    # If no config file exists, create one in the parent directory (project root)
+    # If no config file exists, create one in the split config directory.
     if config_path is None:
-        config_path = Path.cwd().parent / "extensions_config.json"
+        config_path = Path.cwd().parent / "config" / "mcp.yaml"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
         logger.info(f"No existing extensions config found. Creating new config at: {config_path}")
 
     # Load current config to preserve skills
     current_config = get_extensions_config()
 
-    # Load raw (un-resolved) JSON from disk to use as the merge source.
+    # Load raw (un-resolved) YAML from disk to use as the merge source.
     # This preserves $VAR placeholders in env values and top-level keys
     # like mcpInterceptors that would otherwise be lost.
     raw_servers: dict[str, dict] = {}
     raw_other_keys: dict = {}
     if config_path is not None and config_path.exists():
         with open(config_path, encoding="utf-8") as f:
-            raw_data = json.load(f)
+            raw_data = yaml.safe_load(f) or {}
+        if not isinstance(raw_data, dict):
+            raw_data = {}
         raw_servers = raw_data.get("mcpServers", {})
         # Preserve any top-level keys beyond mcpServers/skills
         for key, value in raw_data.items():
@@ -390,13 +393,13 @@ def _apply_mcp_config_update(body: McpConfigUpdateRequest) -> dict:
 
     # Write the configuration to file
     with open(config_path, "w", encoding="utf-8") as f:
-        json.dump(config_data, f, indent=2)
+        yaml.safe_dump(config_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
     logger.info(f"MCP configuration updated and saved to: {config_path}")
 
     # Reload the Gateway configuration and update the global cache. The
     # agent runtime lives in Gateway, so this keeps API reads and tool
-    # execution aligned after extensions_config.json changes.
+    # execution aligned after config/mcp.yaml changes.
     reloaded_config = reload_extensions_config()
     return reloaded_config.mcp_servers
 
@@ -412,7 +415,7 @@ async def reset_mcp_tools_cache_endpoint(request: Request) -> McpCacheResetRespo
 
     The next agent run or tool lookup will reload tools from the configured MCP
     servers. This affects all threads and users in the current Gateway process,
-    and avoids relying on extensions_config.json mtime changes.
+    and avoids relying on config/mcp.yaml mtime changes.
     """
     await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
     reset_mcp_tools_cache()
@@ -432,7 +435,7 @@ async def update_mcp_configuration(request: Request, body: McpConfigUpdateReques
     """Update the MCP configuration.
 
     This will:
-    1. Save the new configuration to the mcp_config.json file
+    1. Save the new configuration to config/mcp.yaml
     2. Reload the configuration cache
     3. Reset MCP tools cache to trigger reinitialization
 
@@ -464,7 +467,7 @@ async def update_mcp_configuration(request: Request, body: McpConfigUpdateReques
         await require_admin_user(request, detail=_ADMIN_REQUIRED_DETAIL)
         _validate_mcp_update_request(body)
 
-        # Offload the blocking read-modify-write of extensions_config.json
+        # Offload the blocking read-modify-write of config/mcp.yaml
         # (path resolve, existence probe, raw read, merged write, reload). The
         # lock serializes concurrent updates within this process so the RMW stays
         # atomic now that it no longer runs inline on the event loop.

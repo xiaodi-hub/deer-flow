@@ -96,16 +96,17 @@ describe("MarkdownContent streaming code blocks", () => {
     expect(html).not.toContain("animate-fade-in");
   });
 
-  it("renders large streamed markdown as lightweight plain text", () => {
+  it("keeps rendering large streamed markdown incrementally", () => {
     const longParagraph = "word ".repeat(240);
     const html = renderMarkdown(
       [longParagraph, "", "```python", "print('hello')", "```"].join("\n"),
       true,
     );
 
-    expect(html).toContain("whitespace-pre-wrap");
-    expect(html).toContain("```python");
-    expect(html).not.toContain("data-streaming-code-block");
+    expect(html).toContain("data-streaming-code-block");
+    expect(html).toContain('data-language="python"');
+    expect(html).toContain("print(&#x27;hello&#x27;)");
+    expect(html).not.toContain("```python");
   });
 });
 

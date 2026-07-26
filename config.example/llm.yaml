@@ -1,0 +1,6 @@
+# DeerFlow 大模型配置
+# models 定义前端可选模型和 agent 实际调用的 provider 参数。
+# 每个模型的 use 是 LangChain ChatModel 类路径；api_key 建议使用 $ENV_VAR 引用 .env。
+
+# 可用大模型列表；至少需要一个有效模型才能正常聊天。
+models: null

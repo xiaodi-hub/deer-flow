@@ -347,12 +347,11 @@ fi
 # ── Config check ─────────────────────────────────────────────────────────────
 
 if ! { \
-        [ -n "$DEER_FLOW_CONFIG_PATH" ] && [ -f "$DEER_FLOW_CONFIG_PATH" ] || \
-        [ -f backend/config.yaml ] || \
-        [ -f config.yaml ]; \
+        [ -n "$DEER_FLOW_CONFIG_DIR" ] && [ -d "$DEER_FLOW_CONFIG_DIR" ] || \
+        [ -d config ]; \
     }; then
-    echo "✗ No DeerFlow config file found."
-    echo "  Run 'make setup' (recommended) or 'make config' to generate config.yaml."
+    echo "✗ No DeerFlow config directory found."
+    echo "  Run 'make setup' (recommended) or 'make config' to generate config/."
     exit 1
 fi
 
@@ -365,7 +364,7 @@ fi
 # present on PATH but not executable from Bash.
 DETECT_PYTHON="$(_pick_python || true)"
 
-# Resolve uv extras (postgres, etc.) from UV_EXTRAS or config.yaml so that
+# Resolve uv extras (postgres, etc.) from UV_EXTRAS or config/runtime.yaml so that
 # `uv sync` does not wipe out optional dependencies on every restart. See
 # scripts/detect_uv_extras.py and Issue #2754 for context. The detector
 # whitelists extra names against `^[A-Za-z][A-Za-z0-9_-]*$`, so the unquoted

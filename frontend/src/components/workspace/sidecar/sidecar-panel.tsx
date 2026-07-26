@@ -184,6 +184,7 @@ export function SidecarPanel({ className }: { className?: string }) {
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,
+    pendingUsageMessages,
   } = useThreadStream({
     threadId: sidecar.sidecarThreadId ?? undefined,
     displayThreadId: sidecar.sidecarThreadId ?? undefined,
@@ -588,6 +589,7 @@ export function SidecarPanel({ className }: { className?: string }) {
             testId="sidecar-message-list"
             threadId={sidecar.sidecarThreadId}
             thread={thread}
+            pendingMessages={pendingUsageMessages}
             paddingBottom={MESSAGE_LIST_DEFAULT_PADDING_BOTTOM / 2}
             hasMoreHistory={hasMoreHistory}
             loadMoreHistory={loadMoreHistory}

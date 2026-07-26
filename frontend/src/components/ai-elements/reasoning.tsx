@@ -161,6 +161,9 @@ const defaultGetThinkingMessage = (
   duration?: number,
   startTime?: number | null,
 ) => {
+  if (duration !== undefined && duration > 0) {
+    return <span>Thought for {duration} seconds</span>;
+  }
   if (isStreaming && startTime != null && startTime !== undefined) {
     return <LiveTimer startTime={startTime} />;
   }

@@ -77,8 +77,13 @@ def _parse_major(version_text: str) -> int | None:
 def _load_yaml_file(path: Path) -> dict:
     import yaml
 
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+    if path.is_dir():
+        from deerflow.config.directory_loader import load_config_directory
+
+        data = load_config_directory(path)
+    else:
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f) or {}
     if not isinstance(data, dict):
         raise ValueError("top-level config must be a YAML mapping")
     return data
@@ -206,9 +211,9 @@ def check_nginx() -> CheckResult:
 
 def check_config_exists(config_path: Path) -> CheckResult:
     if config_path.exists():
-        return CheckResult("config.yaml found", "ok")
+        return CheckResult("config/ found", "ok")
     return CheckResult(
-        "config.yaml found",
+        "config/ found",
         "fail",
         fix="Run 'make setup' to create it",
     )
@@ -216,38 +221,32 @@ def check_config_exists(config_path: Path) -> CheckResult:
 
 def check_config_version(config_path: Path, project_root: Path) -> CheckResult:
     if not config_path.exists():
-        return CheckResult("config.yaml version", "skip")
+        return CheckResult("config/ version", "skip")
 
     try:
-        import yaml
-
-        with open(config_path, encoding="utf-8") as f:
-            user_data = yaml.safe_load(f) or {}
+        user_data = _load_yaml_file(config_path)
         user_ver = int(user_data.get("config_version", 0))
     except Exception as exc:
-        return CheckResult("config.yaml version", "fail", str(exc))
+        return CheckResult("config/ version", "fail", str(exc))
 
-    example_path = project_root / "config.example.yaml"
+    example_path = project_root / "config.example"
     if not example_path.exists():
-        return CheckResult("config.yaml version", "skip", "config.example.yaml not found")
+        return CheckResult("config/ version", "skip", "config.example/ not found")
 
     try:
-        import yaml
-
-        with open(example_path, encoding="utf-8") as f:
-            example_data = yaml.safe_load(f) or {}
+        example_data = _load_yaml_file(example_path)
         example_ver = int(example_data.get("config_version", 0))
     except Exception:
-        return CheckResult("config.yaml version", "skip")
+        return CheckResult("config/ version", "skip")
 
     if user_ver < example_ver:
         return CheckResult(
-            "config.yaml version",
+            "config/ version",
             "warn",
             f"v{user_ver} < v{example_ver} (latest)",
             fix="make config-upgrade",
         )
-    return CheckResult("config.yaml version", "ok", f"v{user_ver}")
+    return CheckResult("config/ version", "ok", f"v{user_ver}")
 
 
 def check_models_configured(config_path: Path) -> CheckResult:
@@ -270,17 +269,17 @@ def check_models_configured(config_path: Path) -> CheckResult:
 
 def check_config_loadable(config_path: Path) -> CheckResult:
     if not config_path.exists():
-        return CheckResult("config.yaml loadable", "skip")
+        return CheckResult("config/ loadable", "skip")
 
     try:
         _load_app_config(config_path)
-        return CheckResult("config.yaml loadable", "ok")
+        return CheckResult("config/ loadable", "ok")
     except Exception as exc:
         return CheckResult(
-            "config.yaml loadable",
+            "config/ loadable",
             "fail",
             str(exc),
-            fix="Run 'make setup' again, or compare with config.example.yaml",
+            fix="Run 'make setup' again, or compare with config.example/",
         )
 
 
@@ -291,15 +290,13 @@ def check_llm_api_key(config_path: Path) -> list[CheckResult]:
 
     results: list[CheckResult] = []
     try:
-        import yaml
         from dotenv import load_dotenv
 
         env_path = config_path.parent / ".env"
         if env_path.exists():
             load_dotenv(env_path, override=False)
 
-        with open(config_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+        data = _load_yaml_file(config_path)
 
         for model in data.get("models", []):
             # Collect all values that look like $ENV_VAR references
@@ -342,10 +339,7 @@ def check_llm_package(config_path: Path) -> list[CheckResult]:
 
     results: list[CheckResult] = []
     try:
-        import yaml
-
-        with open(config_path, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+        data = _load_yaml_file(config_path)
 
         seen_packages: set[str] = set()
         for model in data.get("models", []):
@@ -553,7 +547,7 @@ def check_web_tool(config_path: Path, *, tool_name: str, label: str) -> CheckRes
                     label,
                     "fail",
                     f"invalid use path: {use}",
-                    fix="Use a valid module:path provider from config.example.yaml",
+                    fix="Use a valid module:path provider from config.example/llm.yaml",
                 )
             module_name, attr_name = split
             try:
@@ -684,7 +678,7 @@ def check_env_file(project_root: Path) -> CheckResult:
 
 def main() -> int:
     project_root = Path(__file__).resolve().parents[1]
-    config_path = project_root / "config.yaml"
+    config_path = project_root / "config"
 
     # Load .env early so key checks work
     try:

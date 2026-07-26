@@ -1,0 +1,23 @@
+# DeerFlow Prompt 行为配置
+# 这些配置不直接存放完整 system prompt，而是控制标题生成、输入润色、后续建议和安全 finish_reason 等 prompt 周边行为。
+
+# 自动生成会话标题的配置。
+title:
+  enabled: true
+  max_words: 6
+  max_chars: 60
+  model_name: null
+
+# 发送前输入润色配置。
+input_polish:
+  enabled: true
+  max_chars: 4000
+  model_name: null
+
+# 后续问题建议配置。
+suggestions:
+  enabled: true
+
+# provider 安全过滤 finish_reason 的拦截和提示策略。
+safety_finish_reason:
+  enabled: true

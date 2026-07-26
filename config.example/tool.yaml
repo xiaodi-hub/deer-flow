@@ -1,0 +1,81 @@
+# DeerFlow 工具配置
+# tools/tool_groups 定义可用工具及分组。
+# tool_search/tool_output/tool_progress/loop_detection/read_before_write/guardrails 控制工具发现、预算、安全和防循环中间件。
+
+# 工具分组，agent 可按组启用工具。
+tool_groups:
+- name: web
+- name: file:read
+- name: file:write
+- name: bash
+
+# 动态工具配置，use 指向工具变量或工厂路径。
+tools:
+- name: web_search
+  group: web
+  use: deerflow.community.ddg_search.tools:web_search_tool
+  max_results: 5
+- name: web_fetch
+  group: web
+  use: deerflow.community.jina_ai.tools:web_fetch_tool
+  timeout: 10
+- name: image_search
+  group: web
+  use: deerflow.community.image_search.tools:image_search_tool
+  max_results: 5
+- name: ls
+  group: file:read
+  use: deerflow.sandbox.tools:ls_tool
+- name: read_file
+  group: file:read
+  use: deerflow.sandbox.tools:read_file_tool
+- name: glob
+  group: file:read
+  use: deerflow.sandbox.tools:glob_tool
+  max_results: 200
+- name: grep
+  group: file:read
+  use: deerflow.sandbox.tools:grep_tool
+  max_results: 100
+- name: write_file
+  group: file:write
+  use: deerflow.sandbox.tools:write_file_tool
+- name: str_replace
+  group: file:write
+  use: deerflow.sandbox.tools:str_replace_tool
+- name: bash
+  group: bash
+  use: deerflow.sandbox.tools:bash_tool
+
+# 延迟工具发现配置，用于 MCP 工具较多时降低 prompt token。
+tool_search:
+  enabled: false
+  auto_promote_top_k: 3
+
+# 工具输出预算配置，避免大结果撑爆上下文。
+tool_output:
+  enabled: true
+  externalize_min_chars: 12000
+  preview_head_chars: 2000
+  preview_tail_chars: 1000
+  fallback_max_chars: 30000
+  fallback_head_chars: 8000
+  fallback_tail_chars: 3000
+  storage_subdir: .tool-results
+  exempt_tools:
+  - read_file
+  - read_file_tool
+
+# 模型/工具重复循环检测配置。
+loop_detection:
+  enabled: true
+  warn_threshold: 3
+  hard_limit: 5
+  window_size: 20
+  max_tracked_threads: 100
+  tool_freq_warn: 30
+  tool_freq_hard_limit: 50
+
+# 读后写保护配置，避免基于过期上下文覆盖文件。
+read_before_write:
+  enabled: true

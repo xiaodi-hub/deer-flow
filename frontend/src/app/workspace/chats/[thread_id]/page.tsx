@@ -301,6 +301,7 @@ export default function ChatPage() {
                   testId="main-message-list"
                   threadId={threadId}
                   thread={thread}
+                  pendingMessages={pendingUsageMessages}
                   paddingBottom={MESSAGE_LIST_DEFAULT_PADDING_BOTTOM}
                   hasMoreHistory={hasMoreHistory}
                   loadMoreHistory={loadMoreHistory}
