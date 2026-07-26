@@ -14,7 +14,7 @@ import {
   SquareTerminalIcon,
   WrenchIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ChainOfThought,
@@ -470,6 +470,54 @@ function ToolCall({
   const tokenLabel = tokenDebugStep
     ? formatDebugToken(tokenDebugStep, t)
     : null;
+  const writeFilePath =
+    name === "write_file" || name === "str_replace"
+      ? typeof args.path === "string"
+        ? args.path
+        : undefined
+      : undefined;
+  const writeFileArtifactUrl = useMemo(() => {
+    if (!writeFilePath) {
+      return null;
+    }
+    return new URL(
+      `write-file:${writeFilePath}?message_id=${messageId}&tool_call_id=${id}`,
+    ).toString();
+  }, [id, messageId, writeFilePath]);
+
+  useEffect(() => {
+    if (
+      !isLoading ||
+      !isLast ||
+      !autoOpen ||
+      !autoSelect ||
+      !writeFileArtifactUrl ||
+      selectedArtifact === writeFileArtifactUrl
+    ) {
+      return;
+    }
+
+    if (isLoading && !result) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      select(writeFileArtifactUrl, true);
+      setOpen(true);
+    }, 100);
+
+    return () => window.clearTimeout(timeout);
+  }, [
+    autoOpen,
+    autoSelect,
+    isLast,
+    isLoading,
+    result,
+    select,
+    selectedArtifact,
+    setOpen,
+    writeFileArtifactUrl,
+  ]);
   const resolveLabel = (fallback: React.ReactNode) =>
     tokenDebugStep ? (
       <DebugStepLabel label={tokenDebugStep.label} token={tokenLabel} />
@@ -624,19 +672,7 @@ function ToolCall({
     if (!description) {
       description = t.toolCalls.writeFile;
     }
-    const path: string | undefined = (args as { path: string })?.path;
-    if (isLoading && isLast && autoOpen && autoSelect && path && !result) {
-      setTimeout(() => {
-        const url = new URL(
-          `write-file:${path}?message_id=${messageId}&tool_call_id=${id}`,
-        ).toString();
-        if (selectedArtifact === url) {
-          return;
-        }
-        select(url, true);
-        setOpen(true);
-      }, 100);
-    }
+    const path = writeFilePath;
 
     return (
       <ChainOfThoughtStep
@@ -645,12 +681,10 @@ function ToolCall({
         label={resolveLabel(description)}
         icon={NotebookPenIcon}
         onClick={() => {
-          select(
-            new URL(
-              `write-file:${path}?message_id=${messageId}&tool_call_id=${id}`,
-            ).toString(),
-          );
-          setOpen(true);
+          if (writeFileArtifactUrl) {
+            select(writeFileArtifactUrl);
+            setOpen(true);
+          }
         }}
       >
         {path && (

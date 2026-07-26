@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { type ClipboardSafeStreamdownProps } from "@/components/ai-elements/streamdown";
+import { rehypeSplitWordsIntoSpans } from "@/core/rehype";
 import {
   preprocessStreamdownMarkdown,
   streamdownPluginsWithoutRawHtml,
@@ -32,6 +33,12 @@ type StreamingCodeProps = ComponentProps<"code"> & {
   node?: unknown;
   children?: ReactNode;
 };
+
+type RehypePlugin = NonNullable<
+  ClipboardSafeStreamdownProps["rehypePlugins"]
+>[number];
+
+const STREAMING_PLAIN_TEXT_THRESHOLD = 400;
 
 const StreamingCodeBlockContext = createContext(false);
 
@@ -92,6 +99,13 @@ function StreamingCode({
   );
 }
 
+function isWordSplitPlugin(plugin: RehypePlugin) {
+  if (plugin === rehypeSplitWordsIntoSpans) {
+    return true;
+  }
+  return Array.isArray(plugin) && plugin[0] === rehypeSplitWordsIntoSpans;
+}
+
 /** Renders markdown content. */
 export function MarkdownContent({
   content,
@@ -108,8 +122,14 @@ export function MarkdownContent({
   const effectiveRehypePlugins = useMemo(() => {
     const base = streamdownPluginsWithoutRawHtml.rehypePlugins ?? [];
     const extra = rehypePlugins ?? [];
-    return [...base, ...extra] as ClipboardSafeStreamdownProps["rehypePlugins"];
-  }, [rehypePlugins]);
+    const safeExtra = isLoading
+      ? extra.filter((plugin) => !isWordSplitPlugin(plugin))
+      : extra;
+    return [
+      ...base,
+      ...safeExtra,
+    ] as ClipboardSafeStreamdownProps["rehypePlugins"];
+  }, [isLoading, rehypePlugins]);
   const components = useMemo(() => {
     const baseComponents = {
       a: createMarkdownLinkComponent(),
@@ -126,6 +146,14 @@ export function MarkdownContent({
   }, [componentsFromProps, isLoading]);
 
   if (!content) return null;
+
+  if (isLoading && normalizedContent.length > STREAMING_PLAIN_TEXT_THRESHOLD) {
+    return (
+      <div className={cn("break-words whitespace-pre-wrap", className)}>
+        {normalizedContent}
+      </div>
+    );
+  }
 
   return (
     <SafeMessageResponse

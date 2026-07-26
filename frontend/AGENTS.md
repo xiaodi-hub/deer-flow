@@ -63,8 +63,12 @@ The frontend is a stateful chat application. Users create **threads** (conversat
 
 ### Data Flow
 
-1. Optional composer helpers such as `core/input-polish` can rewrite the local draft before submission, and `core/voice-input` can transcribe browser microphone input into that same local draft; confirmed user input then flows to thread hooks (`core/threads/hooks.ts`) → LangGraph SDK streaming
-2. Stream events update thread state (messages, artifacts, todos, goal)
+1. Optional composer helpers such as `core/input-polish` can rewrite the local draft before submission, and `core/voice-input` can transcribe browser microphone input into that same local draft; confirmed user input then flows to thread hooks (`core/threads/hooks.ts`) → LangGraph SDK streaming. Both normal sends and regenerations explicitly request `values`, `messages-tuple`, and `custom`; Gateway uses the same set as its fallback so model text remains token-streamed if a caller omits the option.
+2. Stream events update thread state (messages, artifacts, todos, goal). While a
+   run is active, message rendering treats every group after the latest visible
+   human message as current-turn loading, and long streaming reasoning/markdown
+   falls back to plain text so the thinking timer stays responsive through tool
+   and subtask output.
 3. `useThreadHistory` loads persisted conversation pages from `GET /api/threads/{id}/messages/page`, preserving the backend's thread-global event `seq`; rendering overlays checkpoint/live copies at their matching canonical identities (a summarized checkpoint may contain a protected early input plus a recent tail), suppresses checkpoint/transient prefixes whose canonical position is still behind an unloaded cursor page instead of collapsing that unknown gap before a recent anchor, then adds optimistic messages without timestamp re-sorting. History invalidation preserves already-loaded pages so their established ordering positions are not discarded.
 4. Stop actions call the LangGraph SDK stream stop path; `core/threads/hooks.ts` invalidates current-thread, thread-history, token-usage, and sidebar/search caches immediately and schedules one follow-up refetch because SDK stop may finish via abort + fire-and-forget cancel before backend title finalization commits
 5. TanStack Query manages server state; localStorage stores user settings

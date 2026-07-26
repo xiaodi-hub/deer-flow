@@ -1522,6 +1522,7 @@ export function useThreadStream({
           },
           {
             threadId: threadId,
+            streamMode: ["values", "messages-tuple", "custom"],
             streamSubgraphs: true,
             streamResumable: true,
             config: {
@@ -1628,6 +1629,7 @@ export function useThreadStream({
           threadId,
           checkpoint: prepared.checkpoint,
           metadata: prepared.metadata,
+          streamMode: ["values", "messages-tuple", "custom"],
           streamSubgraphs: true,
           streamResumable: true,
           config: {

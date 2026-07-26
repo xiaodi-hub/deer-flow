@@ -57,14 +57,40 @@ export function useSubtask(id: string) {
 
 export function useUpdateSubtask() {
   const { tasksRef, setTasks } = useSubtaskContext();
-  const shouldNotifyAfterRenderRef = useRef(false);
-  // No deps: must run after every render to check the ref set during render.
-  useEffect(() => {
-    if (!shouldNotifyAfterRenderRef.current) {
+  const pendingPublishRef = useRef(false);
+  const publishFrameRef = useRef<number | null>(null);
+
+  const publishTasks = useCallback(() => {
+    pendingPublishRef.current = false;
+    publishFrameRef.current = null;
+    setTasks({ ...tasksRef.current });
+  }, [setTasks, tasksRef]);
+
+  const schedulePublish = useCallback(() => {
+    pendingPublishRef.current = true;
+    if (publishFrameRef.current !== null) {
       return;
     }
-    shouldNotifyAfterRenderRef.current = false;
-    setTasks({ ...tasksRef.current });
+    if (typeof window === "undefined") {
+      publishTasks();
+      return;
+    }
+    publishFrameRef.current = window.requestAnimationFrame(publishTasks);
+  }, [publishTasks]);
+
+  useEffect(() => {
+    if (!pendingPublishRef.current) {
+      return;
+    }
+    schedulePublish();
+  });
+
+  useEffect(() => {
+    return () => {
+      if (publishFrameRef.current !== null) {
+        window.cancelAnimationFrame(publishFrameRef.current);
+      }
+    };
   });
 
   const updateSubtask = useCallback(
@@ -89,12 +115,12 @@ export function useUpdateSubtask() {
       // no-op re-parses entirely.
       const notify = subtaskNotification(task, { becameTerminal, changed });
       if (notify === "eager") {
-        setTasks({ ...current });
+        schedulePublish();
       } else if (notify === "deferred") {
-        shouldNotifyAfterRenderRef.current = true;
+        pendingPublishRef.current = true;
       }
     },
-    [tasksRef, setTasks],
+    [schedulePublish, tasksRef],
   );
 
   return updateSubtask;

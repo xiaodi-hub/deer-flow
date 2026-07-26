@@ -379,8 +379,11 @@ test.describe("Chat workspace", () => {
     page,
   }) => {
     let streamCalled = false;
+    let streamMode: unknown;
     await page.route("**/runs/stream", (route) => {
       streamCalled = true;
+      streamMode = (route.request().postDataJSON() as { stream_mode?: unknown })
+        .stream_mode;
       return handleRunStream(route);
     });
 
@@ -393,6 +396,7 @@ test.describe("Chat workspace", () => {
     await textarea.press("Enter");
 
     await expect.poll(() => streamCalled, { timeout: 10_000 }).toBeTruthy();
+    expect(streamMode).toEqual(["values", "messages-tuple", "custom"]);
 
     // The AI response should appear in the chat
     await expect(page.getByText("Hello from DeerFlow!")).toBeVisible({

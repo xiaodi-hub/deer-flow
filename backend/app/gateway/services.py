@@ -114,16 +114,19 @@ async def _terminal_record_stream_missing(bridge: StreamBridge, record: RunRecor
 # ---------------------------------------------------------------------------
 
 
+_DEFAULT_STREAM_MODES = ["values", "messages-tuple", "custom"]
+
+
 def normalize_stream_modes(raw: list[str] | str | None) -> list[str]:
     """Normalize the stream_mode parameter to a list.
 
-    Default matches what ``useStream`` expects: values + messages-tuple.
+    Default matches what ``useStream`` expects: values + messages-tuple + custom.
     """
     if raw is None:
-        return ["values"]
+        return list(_DEFAULT_STREAM_MODES)
     if isinstance(raw, str):
         return [raw]
-    return raw if raw else ["values"]
+    return raw if raw else list(_DEFAULT_STREAM_MODES)
 
 
 def _strip_external_message_metadata(message: Any) -> Any:
@@ -622,20 +625,30 @@ async def start_run(
     request : Request
         FastAPI request — used to retrieve singletons from ``app.state``.
     """
+    # ── 1. 获取核心依赖单例 ──
+    # StreamBridge: SSE 事件总线，Agent 运行产生的事件通过它推送给前端
+    # RunManager:   运行记录的 CRUD、状态管理、取消/中断
+    # RunContext:   包装了 thread_store、checkpointer 等上下文资源
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
     run_ctx = get_run_context(request)
 
+    # ── 2. 解析断连模式 ──
+    # "cancel"   → 客户端断开时取消后台运行（交互式请求）
+    # 其他/默认  → 继续运行（后台任务、IM 通道等）
     disconnect = DisconnectMode.cancel if body.on_disconnect == "cancel" else DisconnectMode.continue_
 
+    # ── 3. 提取模型名并做类型归一化 ──
+    # body.context 是 LangGraph Platform 兼容层的扩展字段，承载 DeerFlow 特有运行时配置
     body_context = getattr(body, "context", None) or {}
     model_name = body_context.get("model_name")
 
-    # Coerce non-string model_name values to str before truncation.
+    # 防御性编程：如果 model_name 不是字符串（null、数字等），强制转为 str
     if model_name is not None and not isinstance(model_name, str):
         model_name = str(model_name)
 
-    # Validate model against the allowlist when a model_name is provided.
+    # ── 4. 模型 Allowlist 安全校验 ──
+    # 不允许客户端随意指定任意模型名，只有 config.yaml 中显式配置过的模型才能使用
     if model_name:
         app_config = get_app_config()
         resolved = app_config.get_model_config(model_name)
@@ -645,95 +658,105 @@ async def start_run(
                 detail=f"Model {model_name!r} is not in the configured model allowlist",
             )
 
+    # ── 5. 线程所有权校验（核心安全逻辑）──
+    # 从 X-DeerFlow-Owner-User-Id 请求头提取受信内部所有者 ID
+    # 这个头只有内部通道（IM 机器人、调度器等）才能设置，普通 HTTP 客户端无法伪造
     owner_user_id = get_trusted_internal_owner_user_id(request)
-    # Stateless run endpoints carry thread_id in the request *body*, so the
-    # @require_permission(owner_check=True) decorator -- which resolves ownership
-    # from the path param -- cannot protect them. Enforce thread ownership here,
-    # before any run is created, so one user cannot start runs on (or read /wait
-    # checkpoint state from) another user's thread. Missing rows (auto-created
-    # temp threads) and NULL-owner rows (shared / pre-auth data) stay accessible
-    # via check_access; only a thread already owned by another user is rejected
-    # with 404, matching thread_runs.py's anti-enumeration behaviour. Internal
-    # channel runs act on behalf of the connection owner carried in
-    # X-DeerFlow-Owner-User-Id, so they are scoped to that owner instead of
-    # bypassing the check -- a leaked internal token must not grant cross-user
-    # thread access.
+    # 无状态运行端点的 thread_id 在请求体而非路径参数中，
+    # @require_permission 装饰器无法保护它们，因此在此处手动校验线程所有权。
+    # 用 404 而非 403 防止用户枚举攻击。
+    # 内部通道运行代理的是连接所有者而非内部系统账号，
+    # 即使内部 token 泄露也不能获得跨用户线程访问权。
     user = getattr(request.state, "user", None)
     if user is not None:
+        # 检查当前认证用户是否有权访问该线程
         allowed = await run_ctx.thread_store.check_access(thread_id, str(user.id))
         if not allowed and owner_user_id and getattr(user, "system_role", None) == INTERNAL_SYSTEM_ROLE:
-            # Channel workers may also act for the connection owner named in
-            # the trusted header (e.g. claiming a legacy default-owned channel
-            # thread for its real owner).
+            # 内部通道的二次机会：用 X-DeerFlow-Owner-User-Id 指定的真实所有者身份再检查一次
             allowed = await run_ctx.thread_store.check_access(thread_id, owner_user_id)
         if not allowed:
             raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
+    # ── 6. 设置当前用户上下文（ContextVar）──
+    # 将 owner_user_id 写入 Python ContextVar（协程安全的线程局部变量），
+    # 后续调用链中的 get_current_user() 可从中读取当前用户
     owner_context_token = set_current_user(SimpleNamespace(id=owner_user_id)) if owner_user_id else None
+    # ── 7. 在目标线程锁内创建运行记录 ──
+    # 外层 try/finally 确保 ContextVar 恢复；内层 try/except 处理业务异常
     try:
         try:
+            # goal_thread_lock: 以 thread_id 为键的异步锁，确保同一线程不会同时创建多个运行
             async with goal_thread_lock(thread_id):
                 record = await run_mgr.create_or_reject(
                     thread_id,
                     body.assistant_id,
                     on_disconnect=disconnect,
                     metadata=body.metadata or {},
-                    # Persist a secret-redacted copy of the config: the run record is
-                    # written to runs.kwargs_json and echoed by the run API, so a
-                    # request-scoped secret (#3861) must not ride along. The live
-                    # config built below keeps the secrets for the actual run.
+                    # 持久化到 runs.kwargs_json 的配置快照先做密钥脱敏：
+                    # 运行记录会被 /runs API 回显给客户端，不能泄露一次性 secret (#3861)
                     kwargs={"input": body.input, "config": redact_config_secrets(body.config)},
                     multitask_strategy=body.multitask_strategy,
                     model_name=model_name,
                     user_id=owner_user_id,
                 )
         except ConflictError as exc:
+            # multitask_strategy="reject" 且线程已有活跃运行时抛出 → HTTP 409
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except UnsupportedStrategyError as exc:
+            # 客户端请求了引擎不支持的策略 → HTTP 501
             raise HTTPException(status_code=501, detail=str(exc)) from exc
 
-        # Upsert thread metadata so the thread appears in /threads/search,
-        # even for threads that were never explicitly created via POST /threads
-        # (e.g. stateless runs).
+        # ── 8. 线程元数据 Upsert（非致命操作）──
+        # 确保无状态运行也能在 /threads/search 中出现
         try:
             existing = await run_ctx.thread_store.get(thread_id)
             if existing is None and owner_user_id:
+                # 检查是否有无属主的老线程（user_id=None），若有则认领所有权
                 unscoped_existing = await run_ctx.thread_store.get(thread_id, user_id=None)
                 if unscoped_existing is not None:
                     if unscoped_existing.get("user_id") != owner_user_id:
                         await run_ctx.thread_store.update_owner(thread_id, owner_user_id, user_id=None)
                     existing = await run_ctx.thread_store.get(thread_id)
             if existing is None:
+                # 线程元数据不存在 → 创建
                 await run_ctx.thread_store.create(
                     thread_id,
                     assistant_id=body.assistant_id,
                     metadata=body.metadata,
                 )
             else:
+                # 线程元数据已存在 → 更新状态为 running
                 await run_ctx.thread_store.update_status(thread_id, "running")
         except Exception:
             logger.warning("Failed to upsert thread_meta for %s (non-fatal)", sanitize_log_param(thread_id))
 
+        # ── 9. 构建运行输入与配置 ──
+        # 解析 Agent 工厂函数（所有 assistant_id 都映射到同一个 make_lead_agent，
+        # 自定义 Agent 通过 agent_name 在 configurable 中区分）
         agent_factory = resolve_agent_factory(body.assistant_id)
+        # 判断调用方是否为内部认证源（调度器、IM 通道等）
         is_internal_caller = getattr(getattr(request, "state", None), "auth_source", None) == AUTH_SOURCE_INTERNAL
         command = getattr(body, "command", None)
         if command and command.get("resume") is not None:
+            # 中断恢复：使用 Command(resume=...) 作为图输入
             graph_input = Command(resume=command["resume"])
         else:
+            # 常规输入：将 LangGraph Platform 格式转为 LangChain 状态字典
             graph_input = normalize_input(body.input, trusted_internal=is_internal_caller)
+        # 构建 RunnableConfig（thread_id、recursion_limit 钳制、自定义 agent 名注入等）
         config = build_run_config(thread_id, body.config, body.metadata, assistant_id=body.assistant_id)
+        # 如果请求指定了 checkpoint_id，验证 checkpoint 存在并挂载到 config
         await apply_checkpoint_to_run_config(config, body=body, thread_id=thread_id, request=request)
 
-        # Merge DeerFlow-specific context overrides into both ``configurable`` and ``context``.
-        # The ``context`` field is a custom extension for the langgraph-compat layer
-        # that carries agent configuration (model_name, thinking_enabled, etc.).
-        # Only agent-relevant keys are forwarded; unknown keys (e.g. thread_id) are ignored.
+        # ── 10. 合并上下文覆盖 & 注入认证信息 ──
+        # 将 body.context 中白名单内的键合并到 config["configurable"] 和 config["context"]
         merge_run_context_overrides(config, getattr(body, "context", None), internal=is_internal_caller)
         if not is_internal_caller:
-            # ``body.config`` is free-form and copied verbatim by
-            # ``build_run_config``; scrub internal-only keys smuggled there.
+            # 非内部调用方：清理可能被挟带的内部专用键（non_interactive 等）
             strip_internal_context_keys(config)
+        # 解析真实所有者用户对象（内部调用）
         internal_owner_user = await resolve_trusted_internal_owner_for_attribution(request, owner_user_id)
+        # 将认证用户信息（user_id、user_role、is_internal 等）服务端权威写入 config["context"]
         inject_authenticated_user_context(
             config,
             request,
@@ -741,8 +764,13 @@ async def start_run(
             request_context=getattr(body, "context", None),
         )
 
+        # ── 11. 流模式规范化 ──
+        # 默认值: ["values", "messages-tuple", "custom"]，匹配前端 useStream hook
         stream_modes = normalize_stream_modes(body.stream_mode)
 
+        # ── 12. 启动后台 Agent 任务 ──
+        # asyncio.create_task 创建后台协程，不等待完成，立即返回 HTTP 响应
+        # run_agent 负责：构建 LangGraph 图 → 执行 → 通过 bridge 发布 SSE 事件 → 管理状态转换
         task = asyncio.create_task(
             run_agent(
                 bridge,
@@ -758,14 +786,18 @@ async def start_run(
                 interrupt_after=body.interrupt_after,
             )
         )
+        # 将任务引用挂到 RunRecord 上，方便后续取消/等待操作
         record.task = task
 
-        # Title sync is handled by worker.py's finally block which reads the
-        # title from the checkpoint and calls thread_store.update_display_name
-        # after the run completes.
+        # 标题同步由 worker.py 的 finally 块负责：
+        # 运行完成后从 checkpoint 读取标题并调用 thread_store.update_display_name
 
+        # ── 13. 立即返回 RunRecord ──
+        # 此时后台任务已启动但未完成，HTTP 处理器将其序列化为 JSON 响应
         return record
     finally:
+        # ── 14. 清理 ContextVar ──
+        # 无论正常返回还是异常，都恢复用户上下文，防止泄露到事件循环的其他协程中
         if owner_context_token is not None:
             reset_current_user(owner_context_token)
 

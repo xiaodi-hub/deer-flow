@@ -293,6 +293,10 @@ if $DAEMON_MODE; then
     MODE_LABEL="$MODE_LABEL [daemon]"
 fi
 
+if [ -z "${DEER_FLOW_AUTH_DISABLED+x}" ]; then
+    export DEER_FLOW_AUTH_DISABLED=1
+fi
+
 # Frontend command
 if $DEV_MODE; then
     FRONTEND_CMD="pnpm run dev"

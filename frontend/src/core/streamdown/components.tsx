@@ -1,5 +1,7 @@
 "use client";
 
+import { useMemo } from "react";
+
 import {
   MessageResponse,
   type MessageResponseProps,
@@ -12,11 +14,15 @@ import {
   ClipboardSafeStreamdown,
   type ClipboardSafeStreamdownProps,
 } from "@/components/ai-elements/streamdown";
+import { CollapsibleContent } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 import {
+  getSafeStreamdownMarkdown,
   useSafeStreamdownChildren,
-  useSafeStreamdownMarkdown,
 } from "./safe-children";
+
+const STREAMING_REASONING_PLAIN_TEXT_THRESHOLD = 400;
 
 export function SafeStreamdown({
   children,
@@ -38,11 +44,45 @@ export function SafeMessageResponse({
   return <MessageResponse {...props}>{safeChildren}</MessageResponse>;
 }
 
-export function SafeReasoningContent({
-  children,
-  ...props
-}: ReasoningContentProps) {
-  const safeChildren = useSafeStreamdownMarkdown(children);
+type SafeReasoningContentProps = Omit<ReasoningContentProps, "children"> & {
+  children?: string;
+  isStreaming?: boolean;
+};
 
-  return <ReasoningContent {...props}>{safeChildren}</ReasoningContent>;
+export function SafeReasoningContent({
+  children = "",
+  className,
+  isStreaming = false,
+  ...props
+}: SafeReasoningContentProps) {
+  const renderAsStreamingPlainText =
+    isStreaming && children.length > STREAMING_REASONING_PLAIN_TEXT_THRESHOLD;
+  const safeChildren = useMemo(
+    () =>
+      renderAsStreamingPlainText
+        ? children
+        : getSafeStreamdownMarkdown(children),
+    [children, renderAsStreamingPlainText],
+  );
+
+  if (renderAsStreamingPlainText) {
+    return (
+      <CollapsibleContent
+        className={cn(
+          "mt-4 text-sm",
+          "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-muted-foreground data-[state=closed]:animate-out data-[state=open]:animate-in outline-none",
+          className,
+        )}
+        {...props}
+      >
+        <div className="break-words whitespace-pre-wrap">{safeChildren}</div>
+      </CollapsibleContent>
+    );
+  }
+
+  return (
+    <ReasoningContent className={className} {...props}>
+      {safeChildren}
+    </ReasoningContent>
+  );
 }

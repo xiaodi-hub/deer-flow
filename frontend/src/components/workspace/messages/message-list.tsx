@@ -48,6 +48,7 @@ import {
   getAssistantTurnCopyData,
   getAssistantTurnUsageMessages,
   getBranchableAssistantGroupIds,
+  getLatestHumanGroupIndex,
   getMessageGroups,
   getStreamingMessageLookup,
   hasContent,
@@ -55,6 +56,7 @@ import {
   hasReasoning,
   isAssistantMessageGroupStreaming,
   isHiddenFromUIMessage,
+  isMessageGroupLoadingInCurrentTurn,
 } from "@/core/messages/utils";
 import { useRehypeSplitWordsIntoSpans } from "@/core/rehype";
 import {
@@ -273,7 +275,7 @@ export function MessageList({
     prevIsLoading.current = thread.isLoading;
   }, [thread.isLoading]);
   const messages = thread.messages;
-  const groupedMessages = getMessageGroups(messages);
+  const groupedMessages = useMemo(() => getMessageGroups(messages), [messages]);
   const [regeneratingMessageId, setRegeneratingMessageId] = useState<
     string | null
   >(null);
@@ -283,19 +285,16 @@ export function MessageList({
   const [branchingMessageId, setBranchingMessageId] = useState<string | null>(
     null,
   );
+  const latestHumanGroupIndex = useMemo(
+    () => getLatestHumanGroupIndex(groupedMessages),
+    [groupedMessages],
+  );
   const hasActiveAssistantText = useMemo(() => {
-    let lastHumanIndex = -1;
-    for (let i = groupedMessages.length - 1; i >= 0; i--) {
-      if (groupedMessages[i]?.type === "human") {
-        lastHumanIndex = i;
-        break;
-      }
-    }
-    if (lastHumanIndex === -1) return false;
+    if (latestHumanGroupIndex === -1) return false;
     return groupedMessages
-      .slice(lastHumanIndex)
+      .slice(latestHumanGroupIndex + 1)
       .some((g) => g.type === "assistant");
-  }, [groupedMessages]);
+  }, [groupedMessages, latestHumanGroupIndex]);
   const rehypePlugins = useRehypeSplitWordsIntoSpans(thread.isLoading);
   const updateSubtask = useUpdateSubtask();
   const lastGroupIndex = groupedMessages.length - 1;
@@ -720,8 +719,14 @@ export function MessageList({
           />
           {groupedMessages.map((group, groupIndex) => {
             const turnUsageMessages = turnUsageMessagesByGroupIndex[groupIndex];
-            const groupIsLoading =
-              thread.isLoading && groupIndex === lastGroupIndex;
+            const groupIsLoading = isMessageGroupLoadingInCurrentTurn({
+              group,
+              groupIndex,
+              isThreadLoading: thread.isLoading,
+              latestHumanGroupIndex,
+              lastGroupIndex,
+              streamingMessages,
+            });
 
             if (group.type === "human" || group.type === "assistant") {
               return (
@@ -739,10 +744,7 @@ export function MessageList({
                     const item = (
                       <MessageListItem
                         message={msg}
-                        isLoading={
-                          thread.isLoading &&
-                          groupIndex === groupedMessages.length - 1
-                        }
+                        isLoading={groupIsLoading}
                         threadId={threadId}
                         artifactPaths={artifactPaths}
                         runId={
@@ -751,11 +753,7 @@ export function MessageList({
                             : undefined
                         }
                         showCopyButton={group.type !== "assistant"}
-                        turnStartTime={
-                          groupIndex === groupedMessages.length - 1
-                            ? turnStartTime
-                            : null
-                        }
+                        turnStartTime={groupIsLoading ? turnStartTime : null}
                       />
                     );
 
@@ -851,7 +849,7 @@ export function MessageList({
                   <div key={group.id} className="w-full">
                     <MarkdownContent
                       content={extractContentFromMessage(message)}
-                      isLoading={thread.isLoading}
+                      isLoading={groupIsLoading}
                       rehypePlugins={rehypePlugins}
                     />
                     {renderTokenUsage({
@@ -875,7 +873,7 @@ export function MessageList({
                   {group.messages[0] && hasContent(group.messages[0]) && (
                     <MarkdownContent
                       content={extractContentFromMessage(group.messages[0])}
-                      isLoading={thread.isLoading}
+                      isLoading={groupIsLoading}
                       rehypePlugins={rehypePlugins}
                       className="mb-4"
                     />
@@ -993,7 +991,7 @@ export function MessageList({
               <div key={"group-" + group.id} className="w-full">
                 <MessageGroup
                   messages={group.messages}
-                  isLoading={thread.isLoading}
+                  isLoading={groupIsLoading}
                   tokenDebugSteps={tokenDebugSteps.filter((step) =>
                     group.messages.some(
                       (message) => message.id === step.messageId,

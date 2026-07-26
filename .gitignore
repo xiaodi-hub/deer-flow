@@ -10,7 +10,7 @@ docker/.cache/
 .Trashes
 ehthumbs.db
 Thumbs.db
-
+.omo
 # Python cache
 __pycache__/
 *.pyc

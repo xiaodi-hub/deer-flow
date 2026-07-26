@@ -407,7 +407,9 @@ function MessageContent_({
           onTurnDurationChange={handleDurationChange}
         >
           <ReasoningTrigger />
-          <SafeReasoningContent>{reasoningContent}</SafeReasoningContent>
+          <SafeReasoningContent isStreaming={isLoading}>
+            {reasoningContent}
+          </SafeReasoningContent>
         </Reasoning>
       </AIElementMessageContent>
     );
@@ -455,7 +457,9 @@ function MessageContent_({
           >
             <ReasoningTrigger hasContent={!!reasoningContent} />
             {reasoningContent && (
-              <SafeReasoningContent>{reasoningContent}</SafeReasoningContent>
+              <SafeReasoningContent isStreaming={isLoading}>
+                {reasoningContent}
+              </SafeReasoningContent>
             )}
           </Reasoning>
         )}

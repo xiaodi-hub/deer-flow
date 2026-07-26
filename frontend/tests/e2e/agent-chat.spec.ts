@@ -139,6 +139,7 @@ test.describe("Agent chat", () => {
     await expect.poll(() => prepareMessageId).toBe(aiMessage.id);
     await expect.poll(() => streamBody).toBeDefined();
     expect(streamBody).toMatchObject({
+      stream_mode: ["values", "messages-tuple", "custom"],
       checkpoint: {
         checkpoint_id: "checkpoint-before-human",
         checkpoint_ns: "",

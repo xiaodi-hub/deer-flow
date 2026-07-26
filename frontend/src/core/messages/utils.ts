@@ -191,6 +191,42 @@ export function getBranchableAssistantGroupIds(
   return branchableGroupIds;
 }
 
+export function getLatestHumanGroupIndex(groups: readonly MessageGroup[]) {
+  for (let index = groups.length - 1; index >= 0; index -= 1) {
+    if (groups[index]?.type === "human") {
+      return index;
+    }
+  }
+  return -1;
+}
+
+export function isMessageGroupLoadingInCurrentTurn({
+  group,
+  groupIndex,
+  isThreadLoading,
+  latestHumanGroupIndex,
+  lastGroupIndex,
+  streamingMessages,
+}: {
+  group: MessageGroup;
+  groupIndex: number;
+  isThreadLoading: boolean;
+  latestHumanGroupIndex: number;
+  lastGroupIndex: number;
+  streamingMessages: StreamingMessageLookup;
+}) {
+  if (!isThreadLoading) {
+    return false;
+  }
+  if (groupIndex === lastGroupIndex) {
+    return true;
+  }
+  if (latestHumanGroupIndex !== -1 && groupIndex > latestHumanGroupIndex) {
+    return true;
+  }
+  return isAssistantMessageGroupStreaming(group.messages, streamingMessages);
+}
+
 export function groupMessages<T>(
   messages: Message[],
   mapper: (group: MessageGroup) => T,

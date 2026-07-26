@@ -3,17 +3,19 @@ import { describe, expect, test } from "@rstest/core";
 
 import {
   extractContentFromMessage,
-  extractTextFromMessage,
   extractReasoningContentFromMessage,
-  getBranchableAssistantGroupIds,
-  getMessageCopyData,
+  extractTextFromMessage,
   getAssistantTurnCopyData,
   getAssistantTurnUsageMessages,
+  getBranchableAssistantGroupIds,
+  getLatestHumanGroupIndex,
+  getMessageCopyData,
   getMessageGroups,
   getStreamingMessageLookup,
   hasContent,
   hasReasoning,
   isAssistantMessageGroupStreaming,
+  isMessageGroupLoadingInCurrentTurn,
   stripUploadedFilesTag,
 } from "@/core/messages/utils";
 
@@ -128,6 +130,78 @@ describe("branchable assistant groups", () => {
     expect([...getBranchableAssistantGroupIds(groups, false)]).toEqual([
       "ai-history",
     ]);
+  });
+});
+
+describe("current turn loading groups", () => {
+  const streamingMessages = {
+    ids: new Set<string>(),
+    messages: new Set<Message>(),
+  };
+  const messages = [
+    { id: "human-1", type: "human", content: "Earlier question" },
+    { id: "ai-history", type: "ai", content: "Earlier answer" },
+    { id: "human-2", type: "human", content: "Search and answer" },
+    {
+      id: "ai-thinking",
+      type: "ai",
+      content: "",
+      additional_kwargs: { reasoning_content: "I should search first." },
+      tool_calls: [{ id: "tool-1", name: "web_search", args: { query: "x" } }],
+    },
+    {
+      id: "tool-result",
+      type: "tool",
+      name: "web_search",
+      tool_call_id: "tool-1",
+      content: "[]",
+    },
+    { id: "ai-final", type: "ai", content: "Final answer is still streaming" },
+  ] as Message[];
+
+  test("keeps earlier thinking in the active turn loading after later output appears", () => {
+    const groups = getMessageGroups(messages);
+    const latestHumanGroupIndex = getLatestHumanGroupIndex(groups);
+    const lastGroupIndex = groups.length - 1;
+
+    expect(groups.map((group) => group.type)).toEqual([
+      "human",
+      "assistant",
+      "human",
+      "assistant:processing",
+      "assistant",
+    ]);
+
+    expect(
+      isMessageGroupLoadingInCurrentTurn({
+        group: groups[1]!,
+        groupIndex: 1,
+        isThreadLoading: true,
+        latestHumanGroupIndex,
+        lastGroupIndex,
+        streamingMessages,
+      }),
+    ).toBe(false);
+    expect(
+      isMessageGroupLoadingInCurrentTurn({
+        group: groups[3]!,
+        groupIndex: 3,
+        isThreadLoading: true,
+        latestHumanGroupIndex,
+        lastGroupIndex,
+        streamingMessages,
+      }),
+    ).toBe(true);
+    expect(
+      isMessageGroupLoadingInCurrentTurn({
+        group: groups[3]!,
+        groupIndex: 3,
+        isThreadLoading: false,
+        latestHumanGroupIndex,
+        lastGroupIndex,
+        streamingMessages,
+      }),
+    ).toBe(false);
   });
 });
 

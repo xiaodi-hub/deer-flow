@@ -3,6 +3,7 @@ import { createElement, type ImgHTMLAttributes } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { MarkdownContent } from "@/components/workspace/messages/markdown-content";
+import { rehypeSplitWordsIntoSpans } from "@/core/rehype";
 
 function renderMarkdown(
   content: string,
@@ -81,6 +82,30 @@ describe("MarkdownContent streaming code blocks", () => {
 
     expect(html).toContain('data-custom-code="true"');
     expect(html).toContain("data-streaming-code-block");
+  });
+
+  it("does not split streamed text into animated word spans", () => {
+    const html = renderToStaticMarkup(
+      createElement(MarkdownContent, {
+        content: "Streaming text should keep the timer responsive.",
+        isLoading: true,
+        rehypePlugins: [rehypeSplitWordsIntoSpans],
+      }),
+    );
+
+    expect(html).not.toContain("animate-fade-in");
+  });
+
+  it("renders large streamed markdown as lightweight plain text", () => {
+    const longParagraph = "word ".repeat(240);
+    const html = renderMarkdown(
+      [longParagraph, "", "```python", "print('hello')", "```"].join("\n"),
+      true,
+    );
+
+    expect(html).toContain("whitespace-pre-wrap");
+    expect(html).toContain("```python");
+    expect(html).not.toContain("data-streaming-code-block");
   });
 });
 

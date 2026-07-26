@@ -58,7 +58,7 @@ def test_sanitize_log_param_strips_control_characters():
 def test_normalize_stream_modes_none():
     from app.gateway.services import normalize_stream_modes
 
-    assert normalize_stream_modes(None) == ["values"]
+    assert normalize_stream_modes(None) == ["values", "messages-tuple", "custom"]
 
 
 def test_normalize_stream_modes_string():
@@ -76,7 +76,7 @@ def test_normalize_stream_modes_list():
 def test_normalize_stream_modes_empty_list():
     from app.gateway.services import normalize_stream_modes
 
-    assert normalize_stream_modes([]) == ["values"]
+    assert normalize_stream_modes([]) == ["values", "messages-tuple", "custom"]
 
 
 def test_normalize_input_none():
