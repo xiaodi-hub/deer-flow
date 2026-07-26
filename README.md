@@ -119,7 +119,7 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
    make setup
    ```
 
-   This launches an interactive wizard that guides you through choosing an LLM provider, optional web search, and execution/safety preferences such as sandbox mode, bash access, and file-write tools. It generates a minimal `config.yaml` and writes your keys to `.env`. Takes about 2 minutes.
+   This launches an interactive wizard that guides you through choosing an LLM provider, optional web search, and execution/safety preferences such as sandbox mode, bash access, and file-write tools. It generates a minimal split `config/` directory and writes your keys to `.env`. Takes about 2 minutes.
 
    The wizard also lets you configure an optional web search provider, or skip it for now.
 
@@ -136,7 +136,7 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
    only, and does not include `.env`, raw conversation messages, or user file
    contents.
 
-   > **Advanced / manual configuration**: If you prefer to edit `config.yaml` directly, run `make config` instead to copy the full template. See `config.example.yaml` for the complete reference including CLI-backed providers (Codex CLI, Claude Code OAuth), OpenRouter, Responses API, subagent runtime caps such as `subagents.max_total_per_run`, and more.
+   > **Advanced / manual configuration**: If you prefer to edit configuration directly, run `make config` instead to copy the full split template. See `config.example/` for the complete reference; model settings live in `config/llm.yaml`, tools in `config/tool.yaml`, runtime/database/sandbox settings in `config/runtime.yaml`, and MCP/public skill state in `config/mcp.yaml`.
 
    <details>
    <summary>Manual model configuration examples</summary>
@@ -242,14 +242,14 @@ Use the table below as a practical starting point when choosing how to run DeerF
 
 ```bash
 make docker-init    # Pull sandbox image (only once or when image updates)
-make docker-start   # Start services (auto-detects sandbox mode from config.yaml)
+make docker-start   # Start services (auto-detects sandbox mode from config/runtime.yaml)
 ```
 
-`make docker-start` starts `provisioner` only when `config.yaml` uses provisioner mode (`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` with `provisioner_url`).
+`make docker-start` starts `provisioner` only when `config/runtime.yaml` uses provisioner mode (`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` with `provisioner_url`).
 
 Docker builds use the upstream `uv` registry by default. If you need faster mirrors in restricted networks, export `UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple` and `NPM_REGISTRY=https://registry.npmmirror.com` before running `make docker-init` or `make docker-start`.
 
-Backend processes automatically pick up `config.yaml` changes on the next config access, so model metadata updates do not require a manual restart during development.
+Backend processes automatically pick up `config/` YAML changes on the next config access, so model metadata updates do not require a manual restart during development.
 
 > [!TIP]
 > On Linux, if Docker-based commands fail with `permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock`, add your user to the `docker` group and re-login before retrying. See [CONTRIBUTING.md](CONTRIBUTING.md#linux-docker-daemon-permission-denied) for the full fix.
@@ -279,7 +279,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed Docker development guide.
 
 If you prefer running services locally:
 
-Prerequisite: complete the "Configuration" steps above first (`make setup`). `make dev` requires a valid `config.yaml` in the project root. Set `DEER_FLOW_PROJECT_ROOT` to define that root explicitly, or `DEER_FLOW_CONFIG_PATH` to point at a specific config file. Runtime state defaults to `.deer-flow` under the project root and can be moved with `DEER_FLOW_HOME`; skills default to `skills/` under the project root and can be moved with `DEER_FLOW_SKILLS_PATH`. Run `make doctor` to verify your setup before starting.
+Prerequisite: complete the "Configuration" steps above first (`make setup`). `make dev` requires a valid `config/` directory in the project root. Set `DEER_FLOW_PROJECT_ROOT` to define that root explicitly, or `DEER_FLOW_CONFIG_DIR` to point at a specific split config directory. Runtime state defaults to `.deer-flow` under the project root and can be moved with `DEER_FLOW_HOME`; skills default to `skills/` under the project root and can be moved with `DEER_FLOW_SKILLS_PATH`. Run `make doctor` to verify your setup before starting.
 On Windows, run the local development flow from Git Bash. Native `cmd.exe` and PowerShell shells are not supported for the bash-based service scripts, and WSL is not guaranteed because some scripts rely on Git for Windows utilities such as `cygpath`.
 
 1. **Check prerequisites**:
@@ -352,7 +352,7 @@ DeerFlow supports multiple sandbox execution modes:
 - **Docker Execution** (runs sandbox code in isolated Docker containers)
 - **Docker Execution with Kubernetes** (runs sandbox code in Kubernetes pods via provisioner service)
 
-For Docker development, service startup follows `config.yaml` sandbox mode. In Local/Docker modes, `provisioner` is not started.
+For Docker development, service startup follows `config/runtime.yaml` sandbox mode. In Local/Docker modes, `provisioner` is not started.
 
 See the [Sandbox Configuration Guide](backend/docs/CONFIGURATION.md#sandbox) to configure your preferred mode.
 
@@ -379,7 +379,7 @@ DeerFlow can also expose user-owned IM channel connections in the workspace UI. 
 | WeCom | WebSocket | Moderate |
 | DingTalk | Stream Push (WebSocket) | Moderate |
 
-**Configuration in `config.yaml`:**
+**Configuration in `config/agent.yaml`:**
 
 ```yaml
 channels:
@@ -495,7 +495,7 @@ DINGTALK_CLIENT_SECRET=your_client_secret
 **Telegram Setup**
 
 1. Chat with [@BotFather](https://t.me/BotFather), send `/newbot`, and copy the HTTP API token.
-2. Set `TELEGRAM_BOT_TOKEN` in `.env` and enable the channel in `config.yaml`.
+2. Set `TELEGRAM_BOT_TOKEN` in `.env` and enable the channel in `config/agent.yaml`.
 
 **Slack Setup**
 
@@ -503,18 +503,18 @@ DINGTALK_CLIENT_SECRET=your_client_secret
 2. Under **OAuth & Permissions**, add Bot Token Scopes: `app_mentions:read`, `chat:write`, `im:history`, `im:read`, `im:write`, `files:write`.
 3. Enable **Socket Mode** → generate an App-Level Token (`xapp-…`) with `connections:write` scope.
 4. Under **Event Subscriptions**, subscribe to bot events: `app_mention`, `message.im`.
-5. Set `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` in `.env` and enable the channel in `config.yaml`.
+5. Set `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` in `.env` and enable the channel in `config/agent.yaml`.
 
 **Feishu / Lark Setup**
 
 1. Create an app on [Feishu Open Platform](https://open.feishu.cn/) → enable **Bot** capability.
 2. Add permissions: `im:message`, `im:message.p2p_msg:readonly`, `im:resource`.
 3. Under **Events**, subscribe to `im.message.receive_v1` and select **Long Connection** mode.
-4. Copy the App ID and App Secret. Set `FEISHU_APP_ID` and `FEISHU_APP_SECRET` in `.env` and enable the channel in `config.yaml`.
+4. Copy the App ID and App Secret. Set `FEISHU_APP_ID` and `FEISHU_APP_SECRET` in `.env` and enable the channel in `config/agent.yaml`.
 
 **WeChat Setup**
 
-1. Enable the `wechat` channel in `config.yaml`.
+1. Enable the `wechat` channel in `config/agent.yaml`.
 2. Either set `WECHAT_BOT_TOKEN` in `.env`, or set `qrcode_login_enabled: true` for first-time QR bootstrap.
 3. When `bot_token` is absent and QR bootstrap is enabled, watch backend logs for the QR content returned by iLink and complete the binding flow.
 4. After the QR flow succeeds, DeerFlow persists the acquired token under `state_dir` for later restarts.
@@ -523,7 +523,7 @@ DINGTALK_CLIENT_SECRET=your_client_secret
 **WeCom Setup**
 
 1. Create a bot on the WeCom AI Bot platform and obtain the `bot_id` and `bot_secret`.
-2. Enable `channels.wecom` in `config.yaml` and fill in `bot_id` / `bot_secret`.
+2. Enable `channels.wecom` in `config/agent.yaml` and fill in `bot_id` / `bot_secret`.
 3. Set `WECOM_BOT_ID` and `WECOM_BOT_SECRET` in `.env`.
 4. Make sure backend dependencies include `wecom-aibot-python-sdk`. The channel uses a WebSocket long connection and does not require a public callback URL.
 5. The current integration supports inbound text, image, and file messages. Final images/files generated by the agent are also sent back to the WeCom conversation.
@@ -532,8 +532,8 @@ DINGTALK_CLIENT_SECRET=your_client_secret
 
 1. Create a DingTalk application in the [DingTalk Developer Console](https://open.dingtalk.com/) and enable **Robot** capability.
 2. Set the message receiving mode to **Stream Mode** in the robot configuration page.
-3. Copy the `Client ID` and `Client Secret`, set `DINGTALK_CLIENT_ID` and `DINGTALK_CLIENT_SECRET` in `.env`, and enable the channel in `config.yaml`.
-4. *(Optional)* To enable streaming AI Card replies (typewriter effect), create an **AI Card** template on the [DingTalk Card Platform](https://open.dingtalk.com/document/dingstart/typewriter-effect-streaming-ai-card), then set `card_template_id` in `config.yaml` to the template ID. You also need to apply for the `Card.Streaming.Write` and `Card.Instance.Write` permissions.
+3. Copy the `Client ID` and `Client Secret`, set `DINGTALK_CLIENT_ID` and `DINGTALK_CLIENT_SECRET` in `.env`, and enable the channel in `config/agent.yaml`.
+4. *(Optional)* To enable streaming AI Card replies (typewriter effect), create an **AI Card** template on the [DingTalk Card Platform](https://open.dingtalk.com/document/dingstart/typewriter-effect-streaming-ai-card), then set `card_template_id` in `config/agent.yaml` to the template ID. You also need to apply for the `Card.Streaming.Write` and `Card.Instance.Write` permissions.
 
 
 When DeerFlow runs in Docker Compose, IM channels execute inside the `gateway` container. In that case, do not point `channels.langgraph_url` or `channels.gateway_url` at `localhost`; use container service names such as `http://gateway:8001/api` and `http://gateway:8001`, or set `DEER_FLOW_CHANNELS_LANGGRAPH_URL` and `DEER_FLOW_CHANNELS_GATEWAY_URL`.
@@ -657,7 +657,7 @@ When you install `.skill` archives through the Gateway, DeerFlow accepts standar
 
 If a trusted operator manages the configured skills directory through an external mount such as MinIO, NFS, or CSI, an administrator can call `POST /api/skills/reload` after changing files. This invalidates skill prompt caches for the current Gateway process and waits up to the bounded refresh timeout so subsequent runs rescan the latest files; running tasks are unchanged. A loader-level filesystem failure returns a generic server error and preserves the last successfully loaded process cache rather than publishing an empty catalog. Uvicorn workers and Kubernetes Pods must each be targeted separately. Direct mount writes bypass the validation, SkillScan, and history applied by DeerFlow's install/edit APIs, so only operator-controlled systems should have write access.
 
-Skill installs and agent-managed skill edits run through **SkillScan**, a native deterministic safety scanner before the LLM-based skill scanner. Phase 1 runs offline with no Semgrep/OpenGrep dependency, blocks high-confidence `CRITICAL` findings such as private keys or shell execution, and passes warning findings to the LLM scanner for contextual review. Set `skill_scan.enabled: false` in `config.yaml` to disable only the deterministic analyzers; safe archive extraction and the LLM scanner still run.
+Skill installs and agent-managed skill edits run through **SkillScan**, a native deterministic safety scanner before the LLM-based skill scanner. Phase 1 runs offline with no Semgrep/OpenGrep dependency, blocks high-confidence `CRITICAL` findings such as private keys or shell execution, and passes warning findings to the LLM scanner for contextual review. Set `skill_scan.enabled: false` in `config/skill.yaml` to disable only the deterministic analyzers; safe archive extraction and the LLM scanner still run.
 
 DeerFlow also ships with **skill-reviewer**, a public skill for read-only skill quality review. It uses the built-in `review_skill_package` tool to inspect installed skills, local packages, archives, or pasted `SKILL.md` content without activating the target skill, binding its secrets, executing its scripts, or installing it. The tool returns a compact, tag-neutralized JSON payload to the model context and keeps the full raw review payload in the tool artifact for programmatic consumers. The deterministic review core reuses DeerFlow parsing and SkillScan facts, emits versioned JSON contracts under `contracts/skill_review/`, and can be run from the backend CLI:
 
@@ -845,11 +845,11 @@ Current MVP limits:
 - No channel or GitHub dispatch targets
 - No `interval` schedule type in this first cut
 
-Enable background polling with `config.yaml -> scheduler.enabled`. Manual trigger uses the same scheduled-task resource and execution path.
+Enable background polling with `config/runtime.yaml -> scheduler.enabled`. Manual trigger uses the same scheduled-task resource and execution path.
 
 ## Terminal Workbench (TUI)
 
-`deerflow` is a terminal-native workbench for people who live in the shell. It runs **embedded** over `DeerFlowClient` — no Gateway, frontend, nginx, or Docker required — while honoring the same `config.yaml`, checkpointer, skills, memory, MCP, and sandbox settings as the rest of DeerFlow.
+`deerflow` is a terminal-native workbench for people who live in the shell. It runs **embedded** over `DeerFlowClient` — no Gateway, frontend, nginx, or Docker required — while honoring the same `config/`, checkpointer, skills, memory, MCP, and sandbox settings as the rest of DeerFlow.
 
 ![DeerFlow TUI](docs/tui/tui-preview.svg)
 

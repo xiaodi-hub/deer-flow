@@ -633,6 +633,12 @@ export interface Translations {
       systemDescription: string;
       lightDescription: string;
       darkDescription: string;
+      chatWidthTitle: string;
+      chatWidthDescription: string;
+      chatWidthCompact: string;
+      chatWidthDefault: string;
+      chatWidthWide: string;
+      chatWidthFull: string;
       languageTitle: string;
       languageDescription: string;
     };

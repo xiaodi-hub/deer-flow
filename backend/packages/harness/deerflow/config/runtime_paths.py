@@ -39,3 +39,13 @@ def existing_project_file(names: tuple[str, ...]) -> Path | None:
         if candidate.is_file():
             return candidate
     return None
+
+
+def existing_project_dir(names: tuple[str, ...]) -> Path | None:
+    """Return the first existing named directory under the project root."""
+    root = project_root()
+    for name in names:
+        candidate = root / name
+        if candidate.is_dir():
+            return candidate
+    return None

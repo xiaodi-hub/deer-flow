@@ -1,0 +1,17 @@
+# DeerFlow Skill 配置
+# skills 控制 skill 搜索路径和容器内挂载路径。
+# skill_scan 控制安装/执行前的安全扫描。
+# skill_evolution 控制 agent 自主创建和修改 skill 的能力。
+
+# skill 路径、容器路径和延迟发现配置。
+skills:
+  container_path: /mnt/skills
+
+# skill 安全扫描配置。
+skill_scan:
+  enabled: true
+
+# agent 创建/修改 skill 的能力开关和限制。
+skill_evolution:
+  enabled: false
+  moderation_model_name: null

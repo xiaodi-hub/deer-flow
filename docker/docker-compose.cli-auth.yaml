@@ -3,7 +3,7 @@
 # Bind-mounts the host Claude Code / Codex CLI config dirs into the gateway so:
 #   - ClaudeChatModel / Codex model providers can reuse the CLI subscription
 #     login (~/.claude/.credentials.json, ~/.codex/auth.json), and
-#   - ACP agents (acp_agents in config.yaml) that run the claude/codex CLI
+#   - ACP agents (acp_agents in config/agent.yaml) that run the claude/codex CLI
 #     inside the container can read their config.
 #
 # SECURITY: these mounts expose the ENTIRE ~/.claude and ~/.codex dirs

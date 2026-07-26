@@ -8,12 +8,12 @@ echo "  Pre-pulling Sandbox Container Image"
 echo "=========================================="
 echo ""
 
-# Try to extract image from config.yaml (handles both commented and uncommented sandbox sections)
+# Try to extract image from config/runtime.yaml.
 IMAGE=""
 CONFIGURED=1
-if [ -f "config.yaml" ]; then
+if [ -f "config/runtime.yaml" ]; then
     # Look for uncommented image: field under the sandbox section
-    IMAGE=$(grep -A 20 "^sandbox:" config.yaml 2>/dev/null | grep "^  image:" | awk '{print $2}' | head -1 || true)
+    IMAGE=$(grep -A 20 "^sandbox:" config/runtime.yaml 2>/dev/null | grep "^  image:" | awk '{print $2}' | head -1 || true)
 fi
 
 if [ -z "$IMAGE" ]; then
@@ -53,7 +53,7 @@ fi
 if [ "$CONFIGURED" -eq 0 ]; then
     echo ""
     echo "⚠ NOTE: pulling this image does not make the sandbox use it."
-    echo "  config.yaml has no uncommented 'sandbox.image', so AioSandboxProvider"
+    echo "  config/runtime.yaml has no uncommented 'sandbox.image', so AioSandboxProvider"
     echo "  falls back to its own built-in default at runtime, which is still"
     echo "  pinned to ':latest' (frozen on an old pre-1.9.3 digest — see #3921)."
     echo "  To actually run on $IMAGE, add it explicitly:"

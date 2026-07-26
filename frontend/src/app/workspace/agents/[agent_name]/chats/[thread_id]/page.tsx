@@ -41,7 +41,11 @@ import {
 import { isHiddenFromUIMessage } from "@/core/messages/utils";
 import { useModels } from "@/core/models/hooks";
 import { useNotification } from "@/core/notification/hooks";
-import { useLocalSettings, useThreadSettings } from "@/core/settings";
+import {
+  getChatContainerStyle,
+  useLocalSettings,
+  useThreadSettings,
+} from "@/core/settings";
 import {
   useThreadMetadata,
   useThreadStream,
@@ -213,6 +217,10 @@ export default function AgentChatPage() {
   const tokenUsageInlineMode = tokenUsageEnabled
     ? localSettings.tokenUsage.inlineMode
     : "off";
+  const chatContainerStyle = useMemo(
+    () => getChatContainerStyle(localSettings.ui.chatWidth),
+    [localSettings.ui.chatWidth],
+  );
   const hasTodos = (thread.values.todos?.length ?? 0) > 0;
   const { activeGoal, hasGoal, setLocalGoal } = useActiveGoal(
     threadId,
@@ -294,6 +302,8 @@ export default function AgentChatPage() {
                   testId="main-message-list"
                   threadId={threadId}
                   thread={thread}
+                  pendingMessages={pendingUsageMessages}
+                  chatWidth={localSettings.ui.chatWidth}
                   paddingBottom={MESSAGE_LIST_DEFAULT_PADDING_BOTTOM}
                   hasMoreHistory={hasMoreHistory}
                   loadMoreHistory={loadMoreHistory}
@@ -328,8 +338,9 @@ export default function AgentChatPage() {
                       "-translate-y-[calc(50vh-48px)] sm:-translate-y-[calc(50vh-96px)]",
                     isWelcomeMode
                       ? "max-w-(--container-width-sm)"
-                      : "max-w-(--container-width-md)",
+                      : "max-w-(--chat-container-width)",
                   )}
+                  style={isWelcomeMode ? undefined : chatContainerStyle}
                 >
                   {(hasGoal || hasTodos) && (
                     <div

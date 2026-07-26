@@ -17,7 +17,6 @@ Usage:
 
 import asyncio
 import concurrent.futures
-import json
 import logging
 import mimetypes
 import os
@@ -29,6 +28,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from langchain.agents import create_agent
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -150,7 +150,7 @@ class DeerFlowClient:
         Loads configuration but defers agent creation to first use.
 
         Args:
-            config_path: Path to config.yaml. Uses default resolution if None.
+            config_path: Path to the split config directory. Uses default resolution if None.
             checkpointer: LangGraph checkpointer instance for state persistence.
                 Required for multi-turn conversations on the same thread_id.
                 Without a checkpointer, each call is stateless.
@@ -204,8 +204,9 @@ class DeerFlowClient:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _atomic_write_json(path: Path, data: dict) -> None:
-        """Write JSON to *path* atomically (temp file + replace)."""
+    def _atomic_write_yaml(path: Path, data: dict) -> None:
+        """Write YAML to *path* atomically (temp file + replace)."""
+        path.parent.mkdir(parents=True, exist_ok=True)
         fd = tempfile.NamedTemporaryFile(
             mode="w",
             dir=path.parent,
@@ -213,7 +214,7 @@ class DeerFlowClient:
             delete=False,
         )
         try:
-            json.dump(data, fd, indent=2)
+            yaml.safe_dump(data, fd, default_flow_style=False, allow_unicode=True, sort_keys=False)
             fd.close()
             Path(fd.name).replace(path)
         except BaseException:
@@ -1098,7 +1099,7 @@ class DeerFlowClient:
     def update_mcp_config(self, mcp_servers: dict[str, dict]) -> dict:
         """Update MCP server configurations.
 
-        Writes to extensions_config.json and reloads the cache.
+        Writes to config/mcp.yaml and reloads the cache.
 
         Args:
             mcp_servers: Dict mapping server name to config dict.
@@ -1113,7 +1114,7 @@ class DeerFlowClient:
         """
         config_path = ExtensionsConfig.resolve_config_path()
         if config_path is None:
-            raise FileNotFoundError("Cannot locate extensions_config.json. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root.")
+            config_path = Path.cwd().parent / "config" / "mcp.yaml"
 
         current_config = get_extensions_config()
 
@@ -1122,7 +1123,7 @@ class DeerFlowClient:
             "skills": {name: {"enabled": skill.enabled} for name, skill in current_config.skills.items()},
         }
 
-        self._atomic_write_json(config_path, config_data)
+        self._atomic_write_yaml(config_path, config_data)
 
         self._agent = None
         self._agent_config_key = None
@@ -1174,14 +1175,14 @@ class DeerFlowClient:
         if skill is None:
             raise ValueError(f"Skill '{name}' not found")
 
-        # PUBLIC skills → global extensions_config.json (shared state).
+        # PUBLIC skills → global config/mcp.yaml (shared state).
         # CUSTOM / LEGACY skills → per-user _skill_states.json (isolated state).
         from deerflow.skills.types import SkillCategory
 
         if skill.category == SkillCategory.PUBLIC:
             config_path = ExtensionsConfig.resolve_config_path()
             if config_path is None:
-                raise FileNotFoundError("Cannot locate extensions_config.json. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root.")
+                config_path = Path.cwd().parent / "config" / "mcp.yaml"
 
             extensions_config = get_extensions_config()
             extensions_config.skills[name] = SkillStateConfig(enabled=enabled)
@@ -1191,7 +1192,7 @@ class DeerFlowClient:
                 "skills": {n: {"enabled": sc.enabled} for n, sc in extensions_config.skills.items()},
             }
 
-            self._atomic_write_json(config_path, config_data)
+            self._atomic_write_yaml(config_path, config_data)
             reload_extensions_config()
         else:
             # CUSTOM / LEGACY: write per-user state
@@ -1203,14 +1204,14 @@ class DeerFlowClient:
                 # Fallback for non-user-scoped storage (unlikely in practice)
                 config_path = ExtensionsConfig.resolve_config_path()
                 if config_path is None:
-                    raise FileNotFoundError("Cannot locate extensions_config.json. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root.")
+                    config_path = Path.cwd().parent / "config" / "mcp.yaml"
                 extensions_config = get_extensions_config()
                 extensions_config.skills[name] = SkillStateConfig(enabled=enabled)
                 config_data = {
                     "mcpServers": {n: s.model_dump() for n, s in extensions_config.mcp_servers.items()},
                     "skills": {n: {"enabled": sc.enabled} for n, sc in extensions_config.skills.items()},
                 }
-                self._atomic_write_json(config_path, config_data)
+                self._atomic_write_yaml(config_path, config_data)
                 reload_extensions_config()
 
         # Invalidate the prompt cache for this caller (and for all users if

@@ -1,0 +1,8 @@
+# DeerFlow Agent 配置
+# agents_api 控制自定义 agent 管理 API。
+# acp_agents/subagents 控制外部 agent 与子 agent。
+# channel_connections/channels 控制 IM 平台连接。
+
+# 自定义 agent 管理 API 配置。
+agents_api:
+  enabled: false

@@ -753,6 +753,13 @@ export const enUS: Translations = {
       systemDescription: "Match the operating system preference automatically.",
       lightDescription: "Bright palette with higher contrast for daytime.",
       darkDescription: "Dim palette that reduces glare for focus.",
+      chatWidthTitle: "Conversation width",
+      chatWidthDescription:
+        "Adjust the display width of the central messages and composer.",
+      chatWidthCompact: "Compact",
+      chatWidthDefault: "Default",
+      chatWidthWide: "Wide",
+      chatWidthFull: "Maximum",
       languageTitle: "Language",
       languageDescription: "Switch between languages.",
     },

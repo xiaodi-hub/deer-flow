@@ -14,6 +14,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { enUS, isLocale, zhCN, type Locale } from "@/core/i18n";
 import { useI18n } from "@/core/i18n/hooks";
+import { type ChatWidth, useLocalSettings } from "@/core/settings";
 import { cn } from "@/lib/utils";
 
 import { SettingsSection } from "./settings-section";
@@ -26,6 +27,7 @@ const languageOptions: { value: Locale; label: string }[] = [
 export function AppearanceSettingsPage() {
   const { t, locale, changeLocale } = useI18n();
   const { theme, setTheme, systemTheme } = useTheme();
+  const [settings, setSettings] = useLocalSettings();
   const currentTheme = (theme ?? "system") as "system" | "light" | "dark";
 
   const themeOptions = useMemo(
@@ -79,6 +81,38 @@ export function AppearanceSettingsPage() {
             />
           ))}
         </div>
+      </SettingsSection>
+
+      <Separator />
+
+      <SettingsSection
+        title={t.settings.appearance.chatWidthTitle}
+        description={t.settings.appearance.chatWidthDescription}
+      >
+        <Select
+          value={settings.ui.chatWidth}
+          onValueChange={(value) =>
+            setSettings("ui", { chatWidth: value as ChatWidth })
+          }
+        >
+          <SelectTrigger className="w-[220px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="compact">
+              {t.settings.appearance.chatWidthCompact}
+            </SelectItem>
+            <SelectItem value="default">
+              {t.settings.appearance.chatWidthDefault}
+            </SelectItem>
+            <SelectItem value="wide">
+              {t.settings.appearance.chatWidthWide}
+            </SelectItem>
+            <SelectItem value="full">
+              {t.settings.appearance.chatWidthFull}
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </SettingsSection>
 
       <Separator />

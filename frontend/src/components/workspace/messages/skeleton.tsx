@@ -1,4 +1,9 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DEFAULT_CHAT_WIDTH,
+  getChatContainerStyle,
+  type ChatWidth,
+} from "@/core/settings";
 
 const STAGGER_MS = 60;
 
@@ -21,10 +26,17 @@ function SkeletonBar({
   );
 }
 
-export function MessageListSkeleton() {
+export function MessageListSkeleton({
+  chatWidth = DEFAULT_CHAT_WIDTH,
+}: {
+  chatWidth?: ChatWidth;
+}) {
   let index = 0;
   return (
-    <div className="flex w-full max-w-(--container-width-md) flex-col gap-12 p-8 pt-16">
+    <div
+      className="flex w-full max-w-(--chat-container-width) flex-col gap-12 p-8 pt-16"
+      style={getChatContainerStyle(chatWidth)}
+    >
       <div
         role="human-message"
         className="flex w-[50%] flex-col items-end gap-2 self-end"

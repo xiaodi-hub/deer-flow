@@ -157,7 +157,7 @@ The provisioner is configured via environment variables (set in [docker-compose-
 
 ### Custom sandbox image
 
-Provisioner-created sandbox Pods use the provisioner's `SANDBOX_IMAGE` environment variable. This is separate from `sandbox.image` in `config.yaml`, which applies to local Docker or Apple Container mode.
+Provisioner-created sandbox Pods use the provisioner's `SANDBOX_IMAGE` environment variable. This is separate from `sandbox.image` in `config/runtime.yaml`, which applies to local Docker or Apple Container mode.
 
 For persistent dependencies, build an image that extends the default `all-in-one-sandbox` image and set `SANDBOX_IMAGE` to your published tag. A from-scratch image must remain compatible with the AIO sandbox HTTP API consumed by `agent-sandbox`, keep `/mnt/user-data` writable, and listen on the configured sandbox port.
 
@@ -226,7 +226,7 @@ kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}'
 The provisioner runs as part of the docker-compose-dev stack:
 
 ```bash
-# Start Docker services (provisioner starts only when config.yaml enables provisioner mode)
+# Start Docker services (provisioner starts only when config/runtime.yaml enables provisioner mode)
 make docker-start
 
 # Or start just the provisioner

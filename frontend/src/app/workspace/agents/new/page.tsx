@@ -45,6 +45,7 @@ import {
   type HumanInputResponse,
 } from "@/core/messages/human-input";
 import { isHiddenFromUIMessage } from "@/core/messages/utils";
+import { getChatContainerStyle, useLocalSettings } from "@/core/settings";
 import { useThreadStream } from "@/core/threads/hooks";
 import { uuid } from "@/core/utils/uuid";
 import { isIMEComposing } from "@/lib/ime";
@@ -80,6 +81,7 @@ async function getAgentWithRetry(agentName: string) {
 export default function NewAgentPage() {
   const { t } = useI18n();
   const router = useRouter();
+  const [localSettings] = useLocalSettings();
 
   const [step, setStep] = useState<Step>("name");
   const [nameInput, setNameInput] = useState("");
@@ -92,8 +94,12 @@ export default function NewAgentPage() {
     useState<SetupAgentStatus>("idle");
 
   const threadId = useMemo(() => uuid(), []);
+  const chatContainerStyle = useMemo(
+    () => getChatContainerStyle(localSettings.ui.chatWidth),
+    [localSettings.ui.chatWidth],
+  );
 
-  const { thread, sendMessage } = useThreadStream({
+  const { thread, sendMessage, pendingUsageMessages } = useThreadStream({
     threadId: undefined,
     context: {
       mode: "flash",
@@ -395,7 +401,10 @@ export default function NewAgentPage() {
           <main className="flex min-h-0 flex-1 flex-col">
             {showSaveHint ? (
               <div className="px-4 pt-4">
-                <div className="mx-auto w-full max-w-(--container-width-md)">
+                <div
+                  className="mx-auto w-full max-w-(--chat-container-width)"
+                  style={chatContainerStyle}
+                >
                   <Alert>
                     <InfoIcon className="h-4 w-4" />
                     <AlertDescription>{t.agents.saveHint}</AlertDescription>
@@ -409,6 +418,8 @@ export default function NewAgentPage() {
                 className={cn("size-full", showSaveHint ? "pt-4" : "pt-10")}
                 threadId={threadId}
                 thread={thread}
+                pendingMessages={pendingUsageMessages}
+                chatWidth={localSettings.ui.chatWidth}
                 onSubmitHumanInput={
                   agentName ? handleSubmitHumanInput : undefined
                 }
@@ -416,7 +427,10 @@ export default function NewAgentPage() {
             </div>
 
             <div className="bg-background flex shrink-0 justify-center border-t px-4 py-4">
-              <div className="w-full max-w-(--container-width-md)">
+              <div
+                className="w-full max-w-(--chat-container-width)"
+                style={chatContainerStyle}
+              >
                 {agent ? (
                   <div className="flex flex-col items-center gap-4 rounded-2xl border py-8 text-center">
                     <CheckCircleIcon className="text-primary h-10 w-10" />

@@ -1,7 +1,16 @@
 import type { TokenUsageInlineMode } from "../messages/usage-model";
 import type { AgentThreadContext } from "../threads";
 
+import {
+  DEFAULT_CHAT_WIDTH,
+  normalizeChatWidth,
+  type ChatWidth,
+} from "./chat-width";
+
 export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
+  ui: {
+    chatWidth: DEFAULT_CHAT_WIDTH,
+  },
   notification: {
     enabled: true,
   },
@@ -24,6 +33,9 @@ function isBrowser(): boolean {
 }
 
 export interface LocalSettings {
+  ui: {
+    chatWidth: ChatWidth;
+  };
   notification: {
     enabled: boolean;
   };
@@ -49,6 +61,11 @@ export interface LocalSettings {
 function mergeLocalSettings(settings?: Partial<LocalSettings>): LocalSettings {
   return {
     ...DEFAULT_LOCAL_SETTINGS,
+    ui: {
+      ...DEFAULT_LOCAL_SETTINGS.ui,
+      ...settings?.ui,
+      chatWidth: normalizeChatWidth(settings?.ui?.chatWidth),
+    },
     context: {
       ...DEFAULT_LOCAL_SETTINGS.context,
       ...settings?.context,

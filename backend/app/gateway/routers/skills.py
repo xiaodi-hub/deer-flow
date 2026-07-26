@@ -1,10 +1,10 @@
 import asyncio
-import json
 import logging
 import tempfile
 from pathlib import Path
 from typing import Literal
 
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -414,10 +414,10 @@ async def get_skill(skill_name: str, config: AppConfig = Depends(get_config)) ->
     "/skills/{skill_name}",
     response_model=SkillResponse,
     summary="Update Skill",
-    description="Update a skill's enabled status by modifying the extensions_config.json file.",
+    description="Update a skill's enabled status by modifying config/mcp.yaml.",
 )
 async def update_skill(skill_name: str, body: SkillUpdateRequest, request: Request, config: AppConfig = Depends(get_config)) -> SkillResponse:
-    # Enabling/disabling a skill writes the shared extensions_config.json and
+    # Enabling/disabling a skill writes the shared config/mcp.yaml and
     # refreshes the system prompt for every tenant, so it is a global mutation
     # (there is no per-user skill state). Guard it as admin-only like the other
     # global config writes, matching the MCP router.
@@ -431,13 +431,14 @@ async def update_skill(skill_name: str, body: SkillUpdateRequest, request: Reque
         if skill is None:
             raise HTTPException(status_code=404, detail=f"Skill '{skill_name}' not found")
 
-        # PUBLIC skills → global extensions_config.json (shared state).
+        # PUBLIC skills → global config/mcp.yaml (shared state).
         # CUSTOM / LEGACY skills → per-user _skill_states.json (isolated state)
         # so that two users with same-named custom skills can toggle independently.
         if skill.category == SkillCategory.PUBLIC:
             config_path = ExtensionsConfig.resolve_config_path()
             if config_path is None:
-                config_path = Path.cwd().parent / "extensions_config.json"
+                config_path = Path.cwd().parent / "config" / "mcp.yaml"
+                config_path.parent.mkdir(parents=True, exist_ok=True)
                 logger.info(f"No existing extensions config found. Creating new config at: {config_path}")
 
             extensions_config = get_extensions_config()
@@ -449,7 +450,7 @@ async def update_skill(skill_name: str, body: SkillUpdateRequest, request: Reque
             }
 
             with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config_data, f, indent=2)
+                yaml.safe_dump(config_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
             logger.info(f"Skills configuration updated and saved to: {config_path}")
             reload_extensions_config()
@@ -463,7 +464,8 @@ async def update_skill(skill_name: str, body: SkillUpdateRequest, request: Reque
                 # Fallback for non-user-scoped storage (unlikely in practice)
                 config_path = ExtensionsConfig.resolve_config_path()
                 if config_path is None:
-                    config_path = Path.cwd().parent / "extensions_config.json"
+                    config_path = Path.cwd().parent / "config" / "mcp.yaml"
+                    config_path.parent.mkdir(parents=True, exist_ok=True)
                 extensions_config = get_extensions_config()
                 extensions_config.skills[skill_name] = SkillStateConfig(enabled=body.enabled)
                 config_data = {
@@ -471,10 +473,10 @@ async def update_skill(skill_name: str, body: SkillUpdateRequest, request: Reque
                     "skills": {name: {"enabled": skill_config.enabled} for name, skill_config in extensions_config.skills.items()},
                 }
                 with open(config_path, "w", encoding="utf-8") as f:
-                    json.dump(config_data, f, indent=2)
+                    yaml.safe_dump(config_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
                 reload_extensions_config()
 
-        # PUBLIC skill enabled state lives in the global extensions_config.json
+        # PUBLIC skill enabled state lives in the global config/mcp.yaml
         # and affects every user, so the prompt cache for ALL users must be
         # invalidated. CUSTOM/LEGACY skill state is per-user so only that
         # user's cache needs to be dropped.

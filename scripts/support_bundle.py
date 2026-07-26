@@ -128,6 +128,15 @@ def _read_yaml(path: Path) -> Any:
     if yaml is None:
         return {"present": True, "error": "PyYAML is not available"}
     try:
+        if path.is_dir():
+            data: dict[str, Any] = {}
+            for child in sorted(path.glob("*.yaml")):
+                if child.name == "mcp.yaml":
+                    continue
+                child_data = yaml.safe_load(child.read_text(encoding="utf-8")) or {}
+                if isinstance(child_data, dict):
+                    data.update(child_data)
+            return data
         return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except Exception as exc:
         return {"present": True, "error": f"{type(exc).__name__}: {exc}"}
@@ -196,7 +205,7 @@ def collect_config_summary(config_path: Path) -> Any:
 
 
 def collect_extensions_summary(extensions_config_path: Path) -> Any:
-    return redact_data(_read_json(extensions_config_path))
+    return redact_data(_read_yaml(extensions_config_path))
 
 
 def collect_git_summary(project_root: Path) -> dict[str, Any]:
@@ -403,11 +412,11 @@ def _maintainer_next_steps(status: str, signals: dict[str, bool]) -> list[str]:
     if signals["node_missing"] or signals["node_version_too_old"]:
         steps.append("Ask the reporter to install Node.js 22+ before treating this as an application bug.")
     if signals["config_missing"] or signals["models_missing"]:
-        steps.append("Do not triage model/runtime behavior until `config.yaml` exists and at least one model is configured.")
+        steps.append("Do not triage model/runtime behavior until `config/` exists and at least one model is configured.")
     if signals["config_error"]:
-        steps.append("Ask the reporter to fix `config.yaml` syntax or regenerate it with `make setup`.")
+        steps.append("Ask the reporter to fix `config/` syntax or regenerate it with `make setup`.")
     if signals["extensions_config_error"]:
-        steps.append("Ask the reporter to fix `extensions_config.json` syntax before triaging MCP/skill behavior.")
+        steps.append("Ask the reporter to fix `config/mcp.yaml` syntax before triaging MCP/skill behavior.")
     if signals["doctor_failed"] and status == "likely_runtime_issue":
         steps.append("Use `doctor.json` plus the reproduction steps in the issue body to identify the failing subsystem.")
     if signals["thread_summary_included"]:
@@ -424,9 +433,9 @@ def _reporter_next_steps(status: str, signals: dict[str, bool]) -> list[str]:
     if signals["node_missing"] or signals["node_version_too_old"]:
         steps.append("Install Node.js 22+ and rerun `make doctor`.")
     if signals["config_missing"] or signals["models_missing"]:
-        steps.append("Create or repair `config.yaml` with `make setup`; model/runtime issues cannot be triaged until at least one model is configured.")
+        steps.append("Create or repair `config/` with `make setup`; model/runtime issues cannot be triaged until at least one model is configured.")
     if signals["config_error"]:
-        steps.append("Fix `config.yaml` syntax or regenerate it with `make setup`.")
+        steps.append("Fix `config/` syntax or regenerate it with `make setup`.")
     if signals["doctor_failed"] and status == "likely_runtime_issue":
         steps.append("Paste the generated issue summary into the GitHub issue. Attach the zip if a maintainer asks for the evidence bundle.")
     if not steps:
@@ -442,8 +451,8 @@ def _evidence_files(*, include_doctor: bool, include_thread_summary: bool) -> li
         ("triage.json", "Stable machine-readable summary for AI or script-assisted triage."),
         ("manifest.json", "Bundle schema, generation time, and privacy declaration."),
         ("environment.json", "OS, Python, and toolchain version probes."),
-        ("config-summary.json", "Redacted config.yaml structure."),
-        ("extensions-summary.json", "Redacted extensions_config.json structure."),
+        ("config-summary.json", "Redacted config/ structure."),
+        ("extensions-summary.json", "Redacted config/mcp.yaml structure."),
         ("git.json", "Branch, commit, upstream, status, and diff-stat metadata."),
     ]
     if include_thread_summary:
@@ -576,7 +585,7 @@ def _draft_affected_areas(triage: dict[str, Any]) -> list[str]:
     signals = triage["signals"]
     areas: list[str] = []
     if signals["config_missing"] or signals["config_error"] or signals["models_missing"] or signals["node_missing"] or signals["node_version_too_old"] or signals["nginx_missing"]:
-        areas.append("Config / setup (make, config.yaml, env)")
+        areas.append("Config / setup (make, config/, env)")
     if signals["extensions_config_error"]:
         areas.extend(["MCP", "Skills"])
     if not areas:
@@ -778,8 +787,8 @@ def create_support_bundle(
 ) -> Path:
     """Create a redacted support bundle and return the zip path."""
     project_root = project_root.resolve()
-    config_path = (config_path or project_root / "config.yaml").resolve()
-    extensions_config_path = (extensions_config_path or project_root / "extensions_config.json").resolve()
+    config_path = (config_path or project_root / "config").resolve()
+    extensions_config_path = (extensions_config_path or project_root / "config" / "mcp.yaml").resolve()
     out_path = (out_path or _default_out_path(project_root)).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if thread_id:
@@ -843,8 +852,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     repo_root = Path(__file__).resolve().parents[1]
     parser.add_argument("--project-root", type=Path, default=repo_root, help="DeerFlow project root")
-    parser.add_argument("--config", type=Path, default=None, help="Path to config.yaml")
-    parser.add_argument("--extensions-config", type=Path, default=None, help="Path to extensions_config.json")
+    parser.add_argument("--config", type=Path, default=None, help="Path to config/ directory")
+    parser.add_argument("--extensions-config", type=Path, default=None, help="Path to config/mcp.yaml")
     parser.add_argument("--thread-id", default=None, help="Optional thread id to include file manifests for")
     parser.add_argument("--out", type=Path, default=None, help="Output zip path")
     parser.add_argument("--include-doctor", action="store_true", help="Include redacted make doctor output")

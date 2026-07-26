@@ -8,7 +8,7 @@
 #   deploy.sh start              — start from pre-built images
 #   deploy.sh down               — stop and remove containers
 #
-# Sandbox mode (local / aio / provisioner) is auto-detected from config.yaml.
+# Sandbox mode (local / aio / provisioner) is auto-detected from config/runtime.yaml.
 #
 # Examples:
 #   deploy.sh                    # build + start
@@ -93,46 +93,27 @@ mkdir -p "$DEER_FLOW_HOME"
 
 export DEER_FLOW_REPO_ROOT="$REPO_ROOT"
 
-# ── config.yaml ───────────────────────────────────────────────────────────────
+# ── config/ ──────────────────────────────────────────────────────────────────
 
-if [ -z "$DEER_FLOW_CONFIG_PATH" ]; then
-    export DEER_FLOW_CONFIG_PATH="$REPO_ROOT/config.yaml"
+if [ -z "$DEER_FLOW_CONFIG_DIR" ]; then
+    export DEER_FLOW_CONFIG_DIR="$REPO_ROOT/config"
 fi
 
-if  [ "$CMD" != "down" ] && [ ! -f "$DEER_FLOW_CONFIG_PATH" ]; then
-    # Try to seed from repo (config.example.yaml is the canonical template)
-    if [ -f "$REPO_ROOT/config.example.yaml" ]; then
-        cp "$REPO_ROOT/config.example.yaml" "$DEER_FLOW_CONFIG_PATH"
-        echo -e "${GREEN}✓ Seeded config.example.yaml → $DEER_FLOW_CONFIG_PATH${NC}"
-        echo -e "${YELLOW}⚠ config.yaml was seeded from the example template.${NC}"
-        echo "  Run 'make setup' to generate a minimal config, or edit $DEER_FLOW_CONFIG_PATH manually before use."
+if  [ "$CMD" != "down" ] && [ ! -d "$DEER_FLOW_CONFIG_DIR" ]; then
+    # Try to seed from repo (config.example/ is the canonical template)
+    if [ -d "$REPO_ROOT/config.example" ]; then
+        cp -R "$REPO_ROOT/config.example" "$DEER_FLOW_CONFIG_DIR"
+        echo -e "${GREEN}✓ Seeded config.example/ → $DEER_FLOW_CONFIG_DIR${NC}"
+        echo -e "${YELLOW}⚠ config/ was seeded from the example template.${NC}"
+        echo "  Run 'make setup' to generate a minimal config, or edit $DEER_FLOW_CONFIG_DIR manually before use."
     else
-        echo -e "${RED}✗ No config.yaml found.${NC}"
+        echo -e "${RED}✗ No config/ found.${NC}"
         echo "  Run 'make setup' from the repo root (recommended),"
         echo "  or 'make config' for the full template, then set the required model API keys."
         exit 1
     fi
 else
-    echo -e "${GREEN}✓ config.yaml: $DEER_FLOW_CONFIG_PATH${NC}"
-fi
-
-# ── extensions_config.json ───────────────────────────────────────────────────
-
-if [ -z "$DEER_FLOW_EXTENSIONS_CONFIG_PATH" ]; then
-    export DEER_FLOW_EXTENSIONS_CONFIG_PATH="$REPO_ROOT/extensions_config.json"
-fi
-
-if [ ! -f "$DEER_FLOW_EXTENSIONS_CONFIG_PATH" ]; then
-    if [ -f "$REPO_ROOT/extensions_config.json" ]; then
-        cp "$REPO_ROOT/extensions_config.json" "$DEER_FLOW_EXTENSIONS_CONFIG_PATH"
-        echo -e "${GREEN}✓ Seeded extensions_config.json → $DEER_FLOW_EXTENSIONS_CONFIG_PATH${NC}"
-    else
-        # Create a minimal empty config so the gateway doesn't fail on startup
-        echo '{"mcpServers":{},"skills":{}}' > "$DEER_FLOW_EXTENSIONS_CONFIG_PATH"
-        echo -e "${YELLOW}⚠ extensions_config.json not found, created empty config at $DEER_FLOW_EXTENSIONS_CONFIG_PATH${NC}"
-    fi
-else
-    echo -e "${GREEN}✓ extensions_config.json: $DEER_FLOW_EXTENSIONS_CONFIG_PATH${NC}"
+    echo -e "${GREEN}✓ config/: $DEER_FLOW_CONFIG_DIR${NC}"
 fi
 
 
@@ -234,7 +215,7 @@ if [ "$CMD" != "down" ] && [ -z "$UV_EXTRAS" ] && [ -n "$_detect_python" ]; then
     done
     if [ -n "$_uv_extras" ]; then
         export UV_EXTRAS="$_uv_extras"
-        echo -e "${GREEN}✓ Auto-detected UV_EXTRAS=${UV_EXTRAS} from config.yaml${NC}"
+        echo -e "${GREEN}✓ Auto-detected UV_EXTRAS=${UV_EXTRAS} from config/runtime.yaml${NC}"
     fi
 fi
 
@@ -243,8 +224,9 @@ fi
 detect_sandbox_mode() {
     local sandbox_use=""
     local provisioner_url=""
+    local runtime_config="$DEER_FLOW_CONFIG_DIR/runtime.yaml"
 
-    [ -f "$DEER_FLOW_CONFIG_PATH" ] || { echo "local"; return; }
+    [ -f "$runtime_config" ] || { echo "local"; return; }
 
     sandbox_use=$(awk '
         /^[[:space:]]*sandbox:[[:space:]]*$/ { in_sandbox=1; next }
@@ -252,7 +234,7 @@ detect_sandbox_mode() {
         in_sandbox && /^[[:space:]]*use:[[:space:]]*/ {
             line=$0; sub(/^[[:space:]]*use:[[:space:]]*/, "", line); print line; exit
         }
-    ' "$DEER_FLOW_CONFIG_PATH")
+    ' "$runtime_config")
 
     provisioner_url=$(awk '
         /^[[:space:]]*sandbox:[[:space:]]*$/ { in_sandbox=1; next }
@@ -260,7 +242,7 @@ detect_sandbox_mode() {
         in_sandbox && /^[[:space:]]*provisioner_url:[[:space:]]*/ {
             line=$0; sub(/^[[:space:]]*provisioner_url:[[:space:]]*/, "", line); print line; exit
         }
-    ' "$DEER_FLOW_CONFIG_PATH")
+    ' "$runtime_config")
 
     if [[ "$sandbox_use" == *"deerflow.community.aio_sandbox:AioSandboxProvider"* ]]; then
         if [ -n "$provisioner_url" ]; then
@@ -279,8 +261,7 @@ if [ "$CMD" = "down" ]; then
     # Set minimal env var defaults so docker compose can parse the file without
     # warning about unset variables that appear in volume specs.
     export DEER_FLOW_HOME="${DEER_FLOW_HOME:-$REPO_ROOT/backend/.deer-flow}"
-    export DEER_FLOW_CONFIG_PATH="${DEER_FLOW_CONFIG_PATH:-$DEER_FLOW_HOME/config.yaml}"
-    export DEER_FLOW_EXTENSIONS_CONFIG_PATH="${DEER_FLOW_EXTENSIONS_CONFIG_PATH:-$DEER_FLOW_HOME/extensions_config.json}"
+    export DEER_FLOW_CONFIG_DIR="${DEER_FLOW_CONFIG_DIR:-$DEER_FLOW_HOME/config}"
     export DEER_FLOW_REPO_ROOT="${DEER_FLOW_REPO_ROOT:-$REPO_ROOT}"
     export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-placeholder}"
     export DEER_FLOW_INTERNAL_AUTH_TOKEN="${DEER_FLOW_INTERNAL_AUTH_TOKEN:-placeholder}"

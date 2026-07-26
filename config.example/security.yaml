@@ -1,0 +1,8 @@
+# DeerFlow 安全配置
+# auth 控制登录和 OIDC。
+# authorization 控制资源访问授权。
+# circuit_breaker 控制 LLM 连续失败后的熔断保护。
+
+# 细粒度资源授权配置。
+authorization:
+  enabled: false

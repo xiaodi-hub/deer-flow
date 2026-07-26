@@ -23,7 +23,7 @@ def main() -> int:
         if not _is_interactive():
             print(
                 "Non-interactive environment detected.\n"
-                "Please edit config.yaml and .env directly, or run 'make setup' in a terminal."
+                "Please edit config/ and .env directly, or run 'make setup' in a terminal."
             )
             return 1
 
@@ -40,7 +40,7 @@ def main() -> int:
         from wizard.writer import write_config_yaml, write_env_file
 
         project_root = Path(__file__).resolve().parents[1]
-        config_path = project_root / "config.yaml"
+        config_path = project_root / "config"
         env_path = project_root / ".env"
 
         print()
@@ -103,7 +103,7 @@ def main() -> int:
             include_write_tools=execution.include_write_tools,
             channel_connection_providers=channels.enabled_providers,
         )
-        print_success(f"Config written to: {config_path.relative_to(project_root)}")
+        print_success(f"Config written to: {config_path.relative_to(project_root)}/")
 
         if not env_path.exists():
             env_example = project_root / ".env.example"

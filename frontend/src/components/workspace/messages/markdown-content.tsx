@@ -38,8 +38,6 @@ type RehypePlugin = NonNullable<
   ClipboardSafeStreamdownProps["rehypePlugins"]
 >[number];
 
-const STREAMING_PLAIN_TEXT_THRESHOLD = 400;
-
 const StreamingCodeBlockContext = createContext(false);
 
 function StreamingPre({ children }: ComponentProps<"pre">) {
@@ -147,16 +145,9 @@ export function MarkdownContent({
 
   if (!content) return null;
 
-  if (isLoading && normalizedContent.length > STREAMING_PLAIN_TEXT_THRESHOLD) {
-    return (
-      <div className={cn("break-words whitespace-pre-wrap", className)}>
-        {normalizedContent}
-      </div>
-    );
-  }
-
   return (
     <SafeMessageResponse
+      key={isLoading ? "streaming" : "complete"}
       className={className}
       remarkPlugins={remarkPlugins}
       rehypePlugins={effectiveRehypePlugins}

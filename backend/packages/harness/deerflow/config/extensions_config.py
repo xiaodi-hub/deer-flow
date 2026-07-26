@@ -1,14 +1,14 @@
 """Unified extensions configuration for MCP servers and skills."""
 
-import json
 import logging
 import os
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from deerflow.config.runtime_paths import existing_project_file
+from deerflow.config.runtime_paths import project_root
 
 logger = logging.getLogger(__name__)
 
@@ -145,24 +145,16 @@ class ExtensionsConfig(BaseModel):
 
     @classmethod
     def resolve_config_path(cls, config_path: str | None = None) -> Path | None:
-        """Resolve the extensions config file path.
+        """Resolve the MCP/skill state config file path.
 
         Priority:
         1. If provided `config_path` argument, use it.
-        2. If provided `DEER_FLOW_EXTENSIONS_CONFIG_PATH` environment variable, use it.
-        3. Otherwise, search the caller project root for `extensions_config.json`, then `mcp_config.json`.
-        4. For backward compatibility, also search legacy backend/repository-root defaults.
-        5. If not found, return None (extensions are optional).
+        2. If provided `DEER_FLOW_MCP_CONFIG_PATH` environment variable, use it.
+        3. Otherwise, use `config/mcp.yaml` under the caller project root.
+        4. If not found, return None (extensions are optional).
 
         Args:
             config_path: Optional path to extensions config file.
-
-        Resolution order:
-            1. If provided `config_path` argument, use it.
-            2. If provided `DEER_FLOW_EXTENSIONS_CONFIG_PATH` environment variable, use it.
-            3. Otherwise, search the caller project root for
-               `extensions_config.json`, then legacy `mcp_config.json`.
-            4. Finally, search backend/repository-root defaults for monorepo compatibility.
 
         Returns:
             Path to the extensions config file if found, otherwise None.
@@ -172,33 +164,18 @@ class ExtensionsConfig(BaseModel):
             if not path.exists():
                 raise FileNotFoundError(f"Extensions config file specified by param `config_path` not found at {path}")
             return path
-        elif os.getenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH"):
-            path = Path(os.getenv("DEER_FLOW_EXTENSIONS_CONFIG_PATH"))
+        elif os.getenv("DEER_FLOW_MCP_CONFIG_PATH"):
+            path = Path(os.getenv("DEER_FLOW_MCP_CONFIG_PATH"))
             if not path.exists():
-                raise FileNotFoundError(f"Extensions config file specified by environment variable `DEER_FLOW_EXTENSIONS_CONFIG_PATH` not found at {path}")
+                raise FileNotFoundError(f"MCP config file specified by environment variable `DEER_FLOW_MCP_CONFIG_PATH` not found at {path}")
             return path
         else:
-            project_config = existing_project_file(("extensions_config.json", "mcp_config.json"))
-            if project_config is not None:
-                return project_config
-
-            backend_dir = Path(__file__).resolve().parents[4]
-            repo_root = backend_dir.parent
-            for path in (
-                backend_dir / "extensions_config.json",
-                repo_root / "extensions_config.json",
-                backend_dir / "mcp_config.json",
-                repo_root / "mcp_config.json",
-            ):
-                if path.exists():
-                    return path
-
-            # Extensions are optional, so return None if not found
-            return None
+            path = project_root() / "config" / "mcp.yaml"
+            return path if path.exists() else None
 
     @classmethod
     def from_file(cls, config_path: str | None = None) -> "ExtensionsConfig":
-        """Load extensions config from JSON file.
+        """Load extensions config from YAML file.
 
         See `resolve_config_path` for more details.
 
@@ -215,11 +192,13 @@ class ExtensionsConfig(BaseModel):
 
         try:
             with open(resolved_path, encoding="utf-8") as f:
-                config_data = json.load(f)
+                config_data = yaml.safe_load(f) or {}
+            if not isinstance(config_data, dict):
+                raise ValueError("top-level extensions config must be a YAML mapping")
             config_data = cls.resolve_env_variables(config_data)
             return cls.model_validate(config_data)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Extensions config file at {resolved_path} is not valid JSON: {e}") from e
+        except yaml.YAMLError as e:
+            raise ValueError(f"Extensions config file at {resolved_path} is not valid YAML: {e}") from e
         except Exception as e:
             raise RuntimeError(f"Failed to load extensions config from {resolved_path}: {e}") from e
 

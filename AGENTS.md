@@ -41,8 +41,7 @@ other `/api/*` go straight to the Gateway REST routers. See
 ```
 deer-flow/
 ├── Makefile                        # Root orchestration: drives the full stack (dev/start/stop, docker, setup)
-├── config.example.yaml             # Template → copy to config.yaml (gitignored) at repo root
-├── extensions_config.example.json  # Template → copy to extensions_config.json (gitignored): MCP servers + skills
+├── config.example/                 # Split config template → copy to config/ (gitignored)
 ├── backend/                        # Python backend — see backend/AGENTS.md
 │   ├── Makefile                    # Per-module backend commands (dev, gateway, test, lint, migrate-rev)
 │   ├── packages/harness/           # deerflow-harness package (import: deerflow.*) — agent framework
@@ -56,11 +55,12 @@ deer-flow/
 └── docs/                           # Cross-cutting docs, plans, and design notes
 ```
 
-Runtime config lives at the **repo root**: copy `config.example.yaml` → `config.yaml`
-(main app config) and `extensions_config.example.json` → `extensions_config.json` (MCP
-servers + skills). Both real files are gitignored and may be edited at runtime via the
-Gateway API. Config schema and resolution order are documented in
-[backend/AGENTS.md](backend/AGENTS.md).
+Runtime config lives in the **repo-root `config/` directory**: copy `config.example/`
+→ `config/` or run `make config` / `make setup`. The real `config/` directory is
+gitignored. App config is split by concern (`llm.yaml`, `tool.yaml`, `runtime.yaml`,
+etc.); MCP servers and public skill enabled state live in `config/mcp.yaml` and may be
+edited at runtime via the Gateway API. Config schema and resolution order are documented
+in [backend/AGENTS.md](backend/AGENTS.md).
 
 Skill quality review note:
 - `skills/public/skill-reviewer/` is the built-in read-only skill quality reviewer.
@@ -71,7 +71,7 @@ Skill quality review note:
   `skill-creator` ownership boundaries.
 
 Scheduled-task note:
-- The scheduled-task MVP adds a workspace page at `/workspace/scheduled-tasks` plus a background scheduler service gated by `config.yaml -> scheduler.enabled`.
+- The scheduled-task MVP adds a workspace page at `/workspace/scheduled-tasks` plus a background scheduler service gated by `config/runtime.yaml -> scheduler.enabled`.
 - Scheduled background runs are intentionally non-interactive: they execute through the normal run lifecycle, but the lead-agent toolset excludes `ask_clarification` when `context.non_interactive=true`. The key is honored only for internally-authenticated callers (the scheduler launch path); client-supplied `context.non_interactive` is dropped.
 
 ## Commands: Root vs. Module
