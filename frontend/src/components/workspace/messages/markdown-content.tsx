@@ -6,7 +6,10 @@ import {
   isValidElement,
   type ReactNode,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
+  useState,
 } from "react";
 
 import { type ClipboardSafeStreamdownProps } from "@/components/ai-elements/streamdown";
@@ -37,6 +40,8 @@ type StreamingCodeProps = ComponentProps<"code"> & {
 type RehypePlugin = NonNullable<
   ClipboardSafeStreamdownProps["rehypePlugins"]
 >[number];
+
+const STREAMING_RENDER_INTERVAL_MS = 80;
 
 const StreamingCodeBlockContext = createContext(false);
 
@@ -104,6 +109,63 @@ function isWordSplitPlugin(plugin: RehypePlugin) {
   return Array.isArray(plugin) && plugin[0] === rehypeSplitWordsIntoSpans;
 }
 
+function useStreamingRenderContent(content: string, isLoading: boolean) {
+  const [renderContent, setRenderContent] = useState(content);
+  const latestContentRef = useRef(content);
+  const lastFlushAtRef = useRef(0);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    latestContentRef.current = content;
+
+    if (!isLoading) {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      lastFlushAtRef.current = Date.now();
+      setRenderContent(content);
+      return;
+    }
+
+    const flush = () => {
+      timeoutRef.current = null;
+      lastFlushAtRef.current = Date.now();
+      setRenderContent((current) =>
+        current === latestContentRef.current
+          ? current
+          : latestContentRef.current,
+      );
+    };
+
+    const now = Date.now();
+    const elapsed = now - lastFlushAtRef.current;
+    if (
+      lastFlushAtRef.current === 0 ||
+      elapsed >= STREAMING_RENDER_INTERVAL_MS
+    ) {
+      flush();
+      return;
+    }
+
+    timeoutRef.current ??= setTimeout(
+      flush,
+      STREAMING_RENDER_INTERVAL_MS - elapsed,
+    );
+  }, [content, isLoading]);
+
+  useEffect(
+    () => () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    },
+    [],
+  );
+
+  return renderContent;
+}
+
 /** Renders markdown content. */
 export function MarkdownContent({
   content,
@@ -113,9 +175,10 @@ export function MarkdownContent({
   remarkPlugins = streamdownPluginsWithoutRawHtml.remarkPlugins,
   components: componentsFromProps,
 }: MarkdownContentProps) {
+  const renderContent = useStreamingRenderContent(content, isLoading);
   const normalizedContent = useMemo(
-    () => preprocessStreamdownMarkdown(content),
-    [content],
+    () => preprocessStreamdownMarkdown(renderContent),
+    [renderContent],
   );
   const effectiveRehypePlugins = useMemo(() => {
     const base = streamdownPluginsWithoutRawHtml.rehypePlugins ?? [];
@@ -143,7 +206,7 @@ export function MarkdownContent({
     };
   }, [componentsFromProps, isLoading]);
 
-  if (!content) return null;
+  if (!renderContent) return null;
 
   return (
     <SafeMessageResponse

@@ -182,6 +182,7 @@ export interface Translations {
     demoChats: string;
     agents: string;
     scheduledTasks: string;
+    sessionManagement: string;
     agentsDisabledTooltip: string;
     channels: string;
   };
@@ -377,6 +378,16 @@ export interface Translations {
     loadMoreToSearch: string;
     loadingMore: string;
     loadOlderChats: string;
+    sessionManagementTitle: string;
+    sessionManagementDescription: string;
+    selectAllVisible: string;
+    selectedCount: (count: number) => string;
+    bulkDelete: string;
+    bulkDeleteConfirmTitle: string;
+    bulkDeleteConfirmDescription: (count: number) => string;
+    bulkDeleteSuccess: (count: number) => string;
+    bulkDeletePartialFailure: (success: number, failed: number) => string;
+    noChats: string;
   };
 
   // Sidecar
@@ -433,6 +444,7 @@ export interface Translations {
     appName: string;
     chats: string;
     newChat: string;
+    sessionManagement: string;
     untitled: string;
   };
 

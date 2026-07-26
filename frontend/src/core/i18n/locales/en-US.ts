@@ -251,6 +251,7 @@ export const enUS: Translations = {
     demoChats: "Demo chats",
     agents: "Agents",
     scheduledTasks: "Scheduled tasks",
+    sessionManagement: "Session management",
     agentsDisabledTooltip: "Feature not enabled",
   },
 
@@ -475,6 +476,19 @@ export const enUS: Translations = {
     loadMoreToSearch: "Load more to search older conversations",
     loadingMore: "Loading more...",
     loadOlderChats: "Load older chats",
+    sessionManagementTitle: "Session management",
+    sessionManagementDescription:
+      "Select loaded conversations and delete the records you no longer need.",
+    selectAllVisible: "Select current list",
+    selectedCount: (count) => `${count} selected`,
+    bulkDelete: "Bulk delete",
+    bulkDeleteConfirmTitle: "Delete selected conversations?",
+    bulkDeleteConfirmDescription: (count) =>
+      `This will delete ${count} conversations. This action cannot be undone.`,
+    bulkDeleteSuccess: (count) => `${count} conversations deleted`,
+    bulkDeletePartialFailure: (success, failed) =>
+      `${success} conversations deleted, ${failed} failed.`,
+    noChats: "No conversations to display",
   },
 
   // Sidecar
@@ -542,6 +556,7 @@ export const enUS: Translations = {
     appName: "DeerFlow",
     chats: "Chats",
     newChat: "New chat",
+    sessionManagement: "Session management",
     untitled: "Untitled",
   },
 

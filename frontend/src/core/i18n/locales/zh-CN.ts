@@ -238,6 +238,7 @@ export const zhCN: Translations = {
     demoChats: "演示对话",
     agents: "智能体",
     scheduledTasks: "定时任务",
+    sessionManagement: "会话管理",
     agentsDisabledTooltip: "功能未启用",
   },
 
@@ -454,6 +455,19 @@ export const zhCN: Translations = {
     loadMoreToSearch: "加载更多以搜索更早的对话",
     loadingMore: "正在加载...",
     loadOlderChats: "加载更早的对话",
+    sessionManagementTitle: "会话管理",
+    sessionManagementDescription:
+      "选择已加载的会话，并批量删除不再需要的记录。",
+    selectAllVisible: "选择当前列表",
+    selectedCount: (count) => `已选择 ${count} 个会话`,
+    bulkDelete: "批量删除",
+    bulkDeleteConfirmTitle: "删除选中的会话？",
+    bulkDeleteConfirmDescription: (count) =>
+      `将删除 ${count} 个会话。此操作不可撤销。`,
+    bulkDeleteSuccess: (count) => `已删除 ${count} 个会话`,
+    bulkDeletePartialFailure: (success, failed) =>
+      `已删除 ${success} 个会话，${failed} 个删除失败。`,
+    noChats: "没有可显示的会话",
   },
 
   // Sidecar
@@ -521,6 +535,7 @@ export const zhCN: Translations = {
     appName: "DeerFlow",
     chats: "对话",
     newChat: "新对话",
+    sessionManagement: "会话管理",
     untitled: "未命名",
   },
 

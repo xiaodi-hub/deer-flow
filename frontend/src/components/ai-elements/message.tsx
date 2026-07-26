@@ -317,7 +317,13 @@ export const MessageResponse = memo(
       {...props}
     />
   ),
-  (prevProps, nextProps) => prevProps.children === nextProps.children,
+  (prevProps, nextProps) =>
+    prevProps.children === nextProps.children &&
+    prevProps.className === nextProps.className &&
+    prevProps.parseIncompleteMarkdown === nextProps.parseIncompleteMarkdown &&
+    prevProps.components === nextProps.components &&
+    prevProps.remarkPlugins === nextProps.remarkPlugins &&
+    prevProps.rehypePlugins === nextProps.rehypePlugins,
 );
 
 MessageResponse.displayName = "MessageResponse";

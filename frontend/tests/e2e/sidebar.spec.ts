@@ -14,6 +14,9 @@ test.describe("Sidebar navigation", () => {
       timeout: 15_000,
     });
     await expect(sidebar.locator("a[href='/workspace/agents']")).toBeVisible();
+    await expect(
+      sidebar.locator("a[href='/workspace/session-management']"),
+    ).toBeVisible();
   });
 
   test("Agents link navigates to agents page", async ({ page }) => {
@@ -112,6 +115,9 @@ test.describe("Sidebar navigation", () => {
     ).toBeVisible();
     await expect(
       mobileSidebar.locator("a[href='/workspace/agents']"),
+    ).toBeVisible();
+    await expect(
+      mobileSidebar.locator("a[href='/workspace/session-management']"),
     ).toBeVisible();
   });
 });
