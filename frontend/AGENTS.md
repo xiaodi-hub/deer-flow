@@ -42,11 +42,11 @@ Frontend (Next.js) ──▶ LangGraph SDK ──▶ LangGraph Backend (lead_age
                                               └── Tools & Skills
 ```
 
-The frontend is a stateful chat application. Users enter through the **Agent Gallery** (`/` redirects to `/workspace/agents`), choose a scene-specific agent profile, create **threads** (conversations), send messages, set thread-scoped `/goal` completion conditions, and receive streamed AI responses. The backend orchestrates agents that can produce **artifacts** (files/code), **todos**, and goal state updates.
+The frontend is a stateful chat application. Users enter through the **Agent Gallery** (`/` redirects to `/workspace/agents`), choose a scene-specific agent profile, edit that profile's prompt/model/tools/memory/workspace settings, create **threads** (conversations), send messages, set thread-scoped `/goal` completion conditions, and receive streamed AI responses. The backend orchestrates agents that can produce **artifacts** (files/code), **todos**, and goal state updates.
 
 ### Source Layout (`src/`)
 
-- **`app/`** — Next.js App Router. Routes include `/` (redirects to the agent gallery), `/workspace/chats/[thread_id]` (chat), `/workspace/session-management` (bulk conversation management), `/workspace/agents/[agent_name]` and `/workspace/agents/new` (custom agents), `/blog/…`, the `(auth)/{login,setup,auth/callback}` flow, `/[lang]/docs/…`, and `/api/…` route handlers (e.g. `/api/memory`).
+- **`app/`** — Next.js App Router. Routes include `/` (redirects to the agent gallery), `/workspace/chats/[thread_id]` (chat), `/workspace/session-management` (bulk conversation management), `/workspace/agents/[agent_name]/chats/[thread_id]`, `/workspace/agents/[agent_name]/settings`, and `/workspace/agents/new` (custom agents), `/blog/…`, the `(auth)/{login,setup,auth/callback}` flow, `/[lang]/docs/…`, and `/api/…` route handlers (e.g. `/api/memory`).
 - **`components/`** — React components:
   - `ui/` — Shadcn UI primitives (auto-generated, ESLint-ignored)
   - `ai-elements/` — Vercel AI SDK elements (auto-generated, ESLint-ignored)

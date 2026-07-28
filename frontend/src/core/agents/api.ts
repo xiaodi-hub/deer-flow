@@ -80,6 +80,26 @@ export async function updateAgent(
   return res.json() as Promise<Agent>;
 }
 
+export async function selectWorkspaceDirectory(
+  initialPath?: string | null,
+): Promise<{ path: string | null; canceled: boolean }> {
+  const res = await fetch(
+    `${getBackendBaseURL()}/api/agents/workspace-directory/select`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initial_path: initialPath ?? null }),
+    },
+  );
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(
+      err.detail ?? `Failed to select workspace directory: ${res.statusText}`,
+    );
+  }
+  return res.json() as Promise<{ path: string | null; canceled: boolean }>;
+}
+
 export async function deleteAgent(name: string): Promise<void> {
   const res = await fetch(`${getBackendBaseURL()}/api/agents/${name}`, {
     method: "DELETE",

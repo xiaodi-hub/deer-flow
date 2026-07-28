@@ -24,7 +24,11 @@ The default web entry is the **Agent Gallery**. Users choose a scene-specific cu
 agent profile (for example finance analysis, AI news, or learning) and then create
 one or more conversations under that profile. Profiles still run through the shared
 `lead_agent` runtime, but may carry their own model, tool groups, MCP allowlists,
-skill allowlist, `SOUL.md`, gallery metadata, and memory policy.
+skill allowlist, `SOUL.md`, gallery metadata, memory policy, and workspace policy.
+The frontend includes an agent settings surface at
+`/workspace/agents/{agent_name}/settings`; agent workspaces can keep the default
+per-thread directory, share an agent-level directory, or point `/mnt/user-data/workspace`
+at a custom host path.
 
 ## Service Topology
 

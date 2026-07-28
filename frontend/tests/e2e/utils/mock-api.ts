@@ -51,6 +51,12 @@ export type MockAgent = {
   mcp_servers?: string[] | null;
   mcp_tools?: string[] | null;
   skills?: string[] | null;
+  workspace?: {
+    mode: "thread" | "agent" | "custom";
+    path?: string | null;
+    isolate_threads: boolean;
+    allowed_paths: string[];
+  };
   starter_prompts?: string[];
   enabled?: boolean;
   system_prompt?: string;

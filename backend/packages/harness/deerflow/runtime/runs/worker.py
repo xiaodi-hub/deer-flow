@@ -271,6 +271,11 @@ async def run_agent(
     workspace_changes_user_id: str | None = None
     snapshot_capture_failed = False
     llm_error_fallback_message: str | None = None
+    caller_context = config.get("context") if isinstance(config.get("context"), dict) else {}
+    caller_configurable = config.get("configurable") if isinstance(config.get("configurable"), dict) else {}
+    workspace_changes_agent_name = caller_context.get("agent_name") or caller_configurable.get("agent_name") or record.assistant_id
+    if workspace_changes_agent_name == "lead_agent":
+        workspace_changes_agent_name = None
     # Message ids checkpointed *before* this run started. The stream loop uses
     # this set to mask out ``deerflow_error_fallback`` markers that belong to
     # earlier runs on the same thread — without it, one stale fallback in
@@ -319,6 +324,7 @@ async def run_agent(
                 pre_run_workspace_snapshot = await capture_workspace_snapshot(
                     thread_id,
                     user_id=workspace_changes_user_id,
+                    agent_name=workspace_changes_agent_name if isinstance(workspace_changes_agent_name, str) else None,
                 )
             except Exception:
                 logger.warning("Could not capture pre-run workspace snapshot for run %s", run_id, exc_info=True)
@@ -633,6 +639,7 @@ async def run_agent(
                     run_id,
                     pre_run_workspace_snapshot,
                     user_id=workspace_changes_user_id,
+                    agent_name=workspace_changes_agent_name if isinstance(workspace_changes_agent_name, str) else None,
                 )
             except Exception:
                 logger.warning("Failed to record workspace changes for run %s", run_id, exc_info=True)

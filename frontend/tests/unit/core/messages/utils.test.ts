@@ -1,5 +1,5 @@
 import type { Message } from "@langchain/langgraph-sdk";
-import { describe, expect, test } from "@rstest/core";
+import { describe, expect, rs, test } from "@rstest/core";
 
 import {
   extractContentFromMessage,
@@ -878,5 +878,35 @@ describe("orphan tool messages", () => {
     const t1b = allMessages.find((m) => m.id === "t-1b");
     expect(t1b).toBeDefined();
     expect(t1b?.type).toBe("tool");
+  });
+
+  test("opens a processing group when the first visible message is an orphan tool", () => {
+    const errorSpy = rs.spyOn(console, "error").mockImplementation(() => ({}));
+    const messages = [
+      {
+        id: "t-first",
+        type: "tool",
+        name: "bash",
+        tool_call_id: "call-first",
+        content: "output",
+      },
+    ] as Message[];
+
+    try {
+      const groups = getMessageGroups(messages);
+
+      expect(groups.map((group) => group.type)).toEqual([
+        "assistant:processing",
+      ]);
+      expect(groups[0]?.messages.map((message) => message.id)).toEqual([
+        "t-first",
+      ]);
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        "Unexpected tool message with no preceding group",
+        messages[0],
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

@@ -10,6 +10,7 @@ import yaml
 from fastapi.testclient import TestClient
 
 from deerflow.config.agents_api_config import AgentsApiConfig, get_agents_api_config, set_agents_api_config
+from deerflow.config.agents_config import AgentWorkspaceConfig, resolve_agent_workspace_path
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -109,6 +110,7 @@ class TestAgentConfig:
         assert cfg.mcp_tools == ["github_search"]
         assert cfg.memory.read == ["global", "agent"]
         assert cfg.memory.write.default == "agent"
+        assert cfg.workspace.mode == "thread"
         assert cfg.starter_prompts == ["Review this PR"]
         assert cfg.enabled is True
 
@@ -636,6 +638,16 @@ class TestAgentsAPI:
         response = agent_client.get("/api/agents/nonexistent")
         assert response.status_code == 404
 
+    def test_select_workspace_directory_returns_selected_path(self, agent_client, monkeypatch):
+        import app.gateway.routers.agents as agents_router
+
+        monkeypatch.setattr(agents_router, "_select_workspace_directory", lambda initial_path=None: "G:\\agent-workspace")
+
+        response = agent_client.post("/api/agents/workspace-directory/select", json={"initial_path": "G:\\"})
+
+        assert response.status_code == 200
+        assert response.json() == {"path": "G:\\agent-workspace", "canceled": False}
+
     def test_update_agent_soul(self, agent_client):
         agent_client.post("/api/agents", json={"name": "update-me", "soul": "original"})
 
@@ -663,6 +675,7 @@ class TestAgentsAPI:
                 "mcp_servers": ["school"],
                 "mcp_tools": ["school_search"],
                 "memory": {"read": ["global"], "write": {"default": "global", "stable_user_preferences": "global"}},
+                "workspace": {"mode": "custom", "path": "G:\\agent-workspaces\\learning", "isolate_threads": True, "allowed_paths": ["G:\\agent-workspaces"]},
                 "starter_prompts": ["Build a study plan"],
                 "enabled": False,
             },
@@ -677,6 +690,7 @@ class TestAgentsAPI:
         assert data["mcp_tools"] == ["school_search"]
         assert data["memory"]["read"] == ["global"]
         assert data["memory"]["write"]["default"] == "global"
+        assert data["workspace"] == {"mode": "custom", "path": "G:\\agent-workspaces\\learning", "isolate_threads": True, "allowed_paths": ["G:\\agent-workspaces"]}
         assert data["starter_prompts"] == ["Build a study plan"]
         assert data["enabled"] is False
 
@@ -790,6 +804,7 @@ class TestAgentsAPI:
             "mcp_servers": ["market-data"],
             "mcp_tools": ["market-data_quote"],
             "memory": {"read": ["global", "agent"], "write": {"default": "agent", "stable_user_preferences": "global"}},
+            "workspace": {"mode": "agent", "isolate_threads": False},
             "starter_prompts": ["Brief the market open"],
             "soul": "You are specialized.",
         }
@@ -805,7 +820,98 @@ class TestAgentsAPI:
         assert data["mcp_servers"] == ["market-data"]
         assert data["mcp_tools"] == ["market-data_quote"]
         assert data["memory"]["read"] == ["global", "agent"]
+        assert data["workspace"]["mode"] == "agent"
         assert data["starter_prompts"] == ["Brief the market open"]
+
+    def test_resolve_agent_workspace_path_defaults_to_agent_workspace(self, tmp_path, monkeypatch):
+        paths = _make_paths(tmp_path)
+        monkeypatch.setattr("deerflow.config.agents_config.get_paths", lambda: paths)
+
+        workspace = resolve_agent_workspace_path(
+            "stock-analyst",
+            AgentWorkspaceConfig(mode="agent"),
+            thread_id="thread-1",
+            user_id="user-1",
+        )
+
+        assert workspace == tmp_path / "users" / "user-1" / "agents" / "stock-analyst" / "workspace"
+
+    def test_resolve_agent_workspace_path_can_isolate_threads(self, tmp_path):
+        workspace = resolve_agent_workspace_path(
+            "stock-analyst",
+            AgentWorkspaceConfig(mode="custom", path=str(tmp_path / "stock"), isolate_threads=True),
+            thread_id="thread-1",
+            user_id="user-1",
+        )
+
+        assert workspace == tmp_path / "stock" / "threads" / "thread-1"
+
+    def test_thread_data_middleware_uses_agent_workspace(self, tmp_path, monkeypatch):
+        from langchain_core.messages import HumanMessage
+        from langgraph.runtime import Runtime
+
+        from deerflow.agents.middlewares.thread_data_middleware import ThreadDataMiddleware
+
+        paths = _make_paths(tmp_path)
+        monkeypatch.setattr("deerflow.config.agents_config.get_paths", lambda: paths)
+        monkeypatch.setattr("deerflow.agents.middlewares.thread_data_middleware.get_effective_user_id", lambda: "user-1")
+
+        agent_dir = tmp_path / "users" / "user-1" / "agents" / "stock"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "name": "stock",
+                    "workspace": {
+                        "mode": "custom",
+                        "path": str(tmp_path / "stock-workspace"),
+                        "isolate_threads": True,
+                    },
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+        (agent_dir / "SOUL.md").write_text("You analyze stocks.", encoding="utf-8")
+
+        middleware = ThreadDataMiddleware(base_dir=str(tmp_path))
+        result = middleware.before_agent(
+            {"messages": [HumanMessage(content="hi")]},
+            Runtime(context={"thread_id": "thread-1", "agent_name": "stock"}),
+        )
+
+        assert result is not None
+        assert result["thread_data"]["workspace_path"] == str(tmp_path / "stock-workspace" / "threads" / "thread-1")
+        assert result["thread_data"]["outputs_path"] == str(tmp_path / "users" / "user-1" / "threads" / "thread-1" / "user-data" / "outputs")
+
+    def test_workspace_change_roots_use_agent_workspace(self, tmp_path, monkeypatch):
+        from deerflow.workspace_changes.recorder import build_thread_workspace_roots
+
+        paths = _make_paths(tmp_path)
+        monkeypatch.setattr("deerflow.config.agents_config.get_paths", lambda: paths)
+        monkeypatch.setattr("deerflow.workspace_changes.recorder.get_paths", lambda: paths)
+
+        agent_dir = tmp_path / "users" / "user-1" / "agents" / "stock"
+        agent_dir.mkdir(parents=True)
+        (agent_dir / "config.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "name": "stock",
+                    "workspace": {
+                        "mode": "custom",
+                        "path": str(tmp_path / "stock-workspace"),
+                    },
+                },
+                sort_keys=False,
+            ),
+            encoding="utf-8",
+        )
+        (agent_dir / "SOUL.md").write_text("You analyze stocks.", encoding="utf-8")
+
+        roots = build_thread_workspace_roots("thread-1", user_id="user-1", agent_name="stock")
+
+        assert roots[0].name == "workspace"
+        assert roots[0].host_path == tmp_path / "stock-workspace"
 
     def test_create_persists_files_on_disk(self, agent_client, tmp_path):
         agent_client.post("/api/agents", json={"name": "disk-check", "soul": "disk soul"})

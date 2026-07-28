@@ -1,0 +1,185 @@
+Failed to proxy http://127.0.0.1:8001/api/v1/auth/me Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Failed to proxy http://127.0.0.1:8001/api/features Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Failed to proxy http://127.0.0.1:8001/api/channels/providers Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Failed to proxy http://127.0.0.1:8001/api/threads/a07ef401-c8ff-4b10-8187-2f75aed3faae/messages/page Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Failed to proxy http://127.0.0.1:8001/api/skills Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Failed to proxy http://127.0.0.1:8001/api/channels/providers Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Failed to proxy http://127.0.0.1:8001/api/threads/a07ef401-c8ff-4b10-8187-2f75aed3faae/messages/page Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Failed to proxy http://127.0.0.1:8001/api/channels/providers Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Failed to proxy http://127.0.0.1:8001/api/threads/a07ef401-c8ff-4b10-8187-2f75aed3faae/messages/page Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Failed to proxy http://127.0.0.1:8001/api/channels/providers Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Failed to proxy http://127.0.0.1:8001/api/threads/a07ef401-c8ff-4b10-8187-2f75aed3faae/messages/page Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+Error: connect ECONNREFUSED 127.0.0.1:8001
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:8001) {
+  errno: -4078,
+  code: 'ECONNREFUSED',
+  syscall: 'connect',
+  address: '127.0.0.1',
+  port: 8001
+}
+[browser] Error: Internal Server Error
+    at useThreadHistory.useInfiniteQuery[historyQuery] (src/core/threads/hooks.ts:1796:15)
+  1794 |       });
+  1795 |       if (!response.ok) {
+> 1796 |         throw new Error(
+       |               ^
+  1797 |           await readResponseErrorMessage(
+  1798 |             response,
+  1799 |             "Failed to load thread history.", (src/core/threads/hooks.ts:1822:15)

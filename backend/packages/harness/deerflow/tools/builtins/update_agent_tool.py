@@ -97,6 +97,7 @@ _PROFILE_FIELDS_TO_CARRY = (
     "mcp_servers",
     "mcp_tools",
     "memory",
+    "workspace",
     "starter_prompts",
     "enabled",
 )

@@ -17,6 +17,12 @@ export interface Agent {
       stable_user_preferences: "global" | "agent";
     };
   };
+  workspace?: {
+    mode: "thread" | "agent" | "custom";
+    path?: string | null;
+    isolate_threads: boolean;
+    allowed_paths: string[];
+  };
   starter_prompts: string[];
   enabled: boolean;
   soul?: string | null;
@@ -35,6 +41,7 @@ export interface CreateAgentRequest {
   mcp_tools?: string[] | null;
   skills?: string[] | null;
   memory?: Agent["memory"] | null;
+  workspace?: Agent["workspace"] | null;
   starter_prompts?: string[];
   enabled?: boolean;
   soul?: string;
@@ -52,6 +59,7 @@ export interface UpdateAgentRequest {
   mcp_tools?: string[] | null;
   skills?: string[] | null;
   memory?: Agent["memory"] | null;
+  workspace?: Agent["workspace"] | null;
   starter_prompts?: string[] | null;
   enabled?: boolean | null;
   soul?: string | null;

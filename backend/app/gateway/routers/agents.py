@@ -4,13 +4,15 @@ import asyncio
 import logging
 import re
 import shutil
+import sys
+from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from deerflow.config.agents_api_config import get_agents_api_config
-from deerflow.config.agents_config import AgentConfig, AgentMemoryConfig, list_custom_agents, load_agent_config, load_agent_soul, preserve_non_managed_fields
+from deerflow.config.agents_config import AgentConfig, AgentMemoryConfig, AgentWorkspaceConfig, list_custom_agents, load_agent_config, load_agent_soul, preserve_non_managed_fields
 from deerflow.config.paths import get_paths
 from deerflow.runtime.user_context import get_effective_user_id
 
@@ -35,6 +37,7 @@ class AgentResponse(BaseModel):
     mcp_tools: list[str] | None = Field(default=None, description="Optional MCP tool whitelist")
     skills: list[str] | None = Field(default=None, description="Optional skill whitelist (None=all, []=none)")
     memory: AgentMemoryConfig = Field(default_factory=AgentMemoryConfig, description="Agent memory policy")
+    workspace: AgentWorkspaceConfig = Field(default_factory=AgentWorkspaceConfig, description="Agent workspace policy")
     starter_prompts: list[str] = Field(default_factory=list, description="Suggested prompts for new chats")
     enabled: bool = Field(default=True, description="Whether this agent is visible/usable")
     soul: str | None = Field(default=None, description="SOUL.md content")
@@ -61,6 +64,7 @@ class AgentCreateRequest(BaseModel):
     mcp_tools: list[str] | None = Field(default=None, description="Optional MCP tool whitelist")
     skills: list[str] | None = Field(default=None, description="Optional skill whitelist (None=all enabled, []=none)")
     memory: AgentMemoryConfig | None = Field(default=None, description="Agent memory policy")
+    workspace: AgentWorkspaceConfig | None = Field(default=None, description="Agent workspace policy")
     starter_prompts: list[str] = Field(default_factory=list, description="Suggested prompts for new chats")
     enabled: bool = Field(default=True, description="Whether this agent is visible/usable")
     soul: str = Field(default="", description="SOUL.md content — agent personality and behavioral guardrails")
@@ -80,9 +84,23 @@ class AgentUpdateRequest(BaseModel):
     mcp_tools: list[str] | None = Field(default=None, description="Updated MCP tool whitelist")
     skills: list[str] | None = Field(default=None, description="Updated skill whitelist (None=all, []=none)")
     memory: AgentMemoryConfig | None = Field(default=None, description="Updated memory policy")
+    workspace: AgentWorkspaceConfig | None = Field(default=None, description="Updated workspace policy")
     starter_prompts: list[str] | None = Field(default=None, description="Updated suggested prompts")
     enabled: bool | None = Field(default=None, description="Updated visibility/usability flag")
     soul: str | None = Field(default=None, description="Updated SOUL.md content")
+
+
+class WorkspaceDirectorySelectRequest(BaseModel):
+    """Request body for opening a local directory picker on the Gateway host."""
+
+    initial_path: str | None = Field(default=None, description="Optional initial directory for the picker")
+
+
+class WorkspaceDirectorySelectResponse(BaseModel):
+    """Selected local workspace directory."""
+
+    path: str | None = Field(default=None, description="Selected absolute directory path, or null when canceled")
+    canceled: bool = Field(default=False, description="Whether the picker was canceled")
 
 
 def _validate_agent_name(name: str) -> None:
@@ -115,6 +133,37 @@ def _require_agents_api_enabled() -> None:
         )
 
 
+def _require_local_request(request: Request) -> None:
+    """Directory picking opens UI on the Gateway host; expose it only locally."""
+    host = request.client.host if request.client else ""
+    if host not in {"127.0.0.1", "::1", "localhost", "testclient"}:
+        raise HTTPException(status_code=403, detail="Workspace directory selection is only available from a local Gateway request.")
+
+
+def _select_workspace_directory(initial_path: str | None = None) -> str | None:
+    """Open the native folder picker on the Gateway host and return a path."""
+    if sys.platform != "win32":
+        raise RuntimeError("Workspace directory picker is currently only supported on Windows Gateway hosts.")
+
+    import tkinter as tk
+    from tkinter import filedialog
+
+    initial_dir = ""
+    if initial_path:
+        candidate = Path(initial_path).expanduser()
+        if candidate.exists() and candidate.is_dir():
+            initial_dir = str(candidate)
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        selected = filedialog.askdirectory(parent=root, initialdir=initial_dir, title="选择智能体工作区目录")
+    finally:
+        root.destroy()
+    return selected or None
+
+
 def _agent_config_to_response(agent_cfg: AgentConfig, include_soul: bool = False, *, user_id: str | None = None) -> AgentResponse:
     """Convert AgentConfig to AgentResponse."""
     soul: str | None = None
@@ -134,6 +183,7 @@ def _agent_config_to_response(agent_cfg: AgentConfig, include_soul: bool = False
         mcp_tools=agent_cfg.mcp_tools,
         skills=agent_cfg.skills,
         memory=agent_cfg.memory,
+        workspace=agent_cfg.workspace,
         starter_prompts=agent_cfg.starter_prompts,
         enabled=agent_cfg.enabled,
         soul=soul,
@@ -171,6 +221,28 @@ async def list_agents() -> AgentsListResponse:
     except Exception as e:
         logger.error(f"Failed to list agents: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to list agents: {str(e)}")
+
+
+@router.post(
+    "/agents/workspace-directory/select",
+    response_model=WorkspaceDirectorySelectResponse,
+    summary="Select Local Workspace Directory",
+    description="Open a native Windows directory picker on the local Gateway host and return the selected path.",
+)
+async def select_workspace_directory(request: Request, body: WorkspaceDirectorySelectRequest) -> WorkspaceDirectorySelectResponse:
+    """Open a local folder picker for agent workspace configuration."""
+    _require_agents_api_enabled()
+    _require_local_request(request)
+
+    try:
+        selected = await asyncio.to_thread(_select_workspace_directory, body.initial_path)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=501, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.error("Failed to select workspace directory", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to select workspace directory: {str(exc)}") from exc
+
+    return WorkspaceDirectorySelectResponse(path=selected, canceled=selected is None)
 
 
 @router.get(
@@ -295,6 +367,8 @@ async def create_agent_endpoint(request: AgentCreateRequest) -> AgentResponse:
                 config_data["skills"] = request.skills
             if request.memory is not None:
                 config_data["memory"] = request.memory.model_dump(mode="json")
+            if request.workspace is not None:
+                config_data["workspace"] = request.workspace.model_dump(mode="json")
             _set_if_non_empty_list(config_data, "starter_prompts", request.starter_prompts)
             if request.enabled is not True:
                 config_data["enabled"] = request.enabled
@@ -391,6 +465,7 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
             "mcp_tools",
             "skills",
             "memory",
+            "workspace",
             "starter_prompts",
             "enabled",
         }
@@ -441,6 +516,10 @@ async def update_agent(name: str, request: AgentUpdateRequest) -> AgentResponse:
             new_memory = request.memory if "memory" in fields_set else agent_cfg.memory
             if new_memory is not None:
                 updated["memory"] = new_memory.model_dump(mode="json")
+
+            new_workspace = request.workspace if "workspace" in fields_set else agent_cfg.workspace
+            if new_workspace is not None:
+                updated["workspace"] = new_workspace.model_dump(mode="json")
 
             starter_prompts = request.starter_prompts if "starter_prompts" in fields_set else agent_cfg.starter_prompts
             if starter_prompts:

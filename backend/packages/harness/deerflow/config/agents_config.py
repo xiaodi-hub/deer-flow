@@ -175,6 +175,37 @@ class AgentMemoryConfig(BaseModel):
         return scopes
 
 
+class AgentWorkspaceConfig(BaseModel):
+    """Workspace policy for a custom agent profile.
+
+    ``thread`` preserves the existing per-thread workspace behavior.
+    ``agent`` shares one workspace across this agent's chats unless
+    ``isolate_threads`` is enabled. ``custom`` uses ``path`` directly.
+    """
+
+    mode: Literal["thread", "agent", "custom"] = "thread"
+    path: str | None = None
+    isolate_threads: bool = False
+    allowed_paths: list[str] = Field(default_factory=list)
+
+    @field_validator("path")
+    @classmethod
+    def _normalize_path(cls, value: str | None) -> str | None:
+        return _blank_to_none(value)
+
+    @field_validator("allowed_paths")
+    @classmethod
+    def _dedupe_allowed_paths(cls, value: list[str]) -> list[str]:
+        seen: set[str] = set()
+        paths: list[str] = []
+        for raw_path in value:
+            path = raw_path.strip()
+            if path and path not in seen:
+                paths.append(path)
+                seen.add(path)
+        return paths
+
+
 def validate_agent_name(name: str | None) -> str | None:
     """Validate a custom agent name before using it in filesystem paths."""
     if name is None:
@@ -210,6 +241,7 @@ class AgentConfig(BaseModel):
     # integration", which is the case for every existing agent.
     github: GitHubAgentConfig | None = None
     memory: AgentMemoryConfig = Field(default_factory=AgentMemoryConfig)
+    workspace: AgentWorkspaceConfig = Field(default_factory=AgentWorkspaceConfig)
     starter_prompts: list[str] = Field(default_factory=list)
     enabled: bool = True
 
@@ -236,10 +268,41 @@ MANAGED_AGENT_CONFIG_FIELDS: frozenset[str] = frozenset(
         "mcp_tools",
         "skills",
         "memory",
+        "workspace",
         "starter_prompts",
         "enabled",
     }
 )
+
+
+def resolve_agent_workspace_path(
+    agent_name: str | None,
+    workspace: AgentWorkspaceConfig | None,
+    *,
+    thread_id: str,
+    user_id: str | None = None,
+) -> Path | None:
+    """Resolve an agent workspace policy to a host path.
+
+    Returns ``None`` when the caller should keep the standard per-thread
+    workspace. The returned path is not created here; directory creation stays
+    with the thread-data / sandbox lifecycle.
+    """
+    if workspace is None or workspace.mode == "thread":
+        return None
+
+    paths = get_paths()
+    if workspace.path:
+        base = Path(workspace.path).expanduser()
+    elif workspace.mode == "agent" and agent_name:
+        effective_user = user_id or get_effective_user_id()
+        base = paths.user_agent_dir(effective_user, agent_name) / "workspace"
+    else:
+        return None
+
+    if workspace.isolate_threads:
+        return base / "threads" / thread_id
+    return base
 
 
 def preserve_non_managed_fields(existing_cfg: AgentConfig) -> dict[str, object]:

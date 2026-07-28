@@ -22,12 +22,32 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
-def build_thread_workspace_roots(thread_id: str, *, user_id: str | None = None) -> list[WorkspaceRoot]:
+def build_thread_workspace_roots(thread_id: str, *, user_id: str | None = None, agent_name: str | None = None) -> list[WorkspaceRoot]:
     paths = get_paths()
+    workspace_path = paths.sandbox_work_dir(thread_id, user_id=user_id)
+    try:
+        from deerflow.config.agents_config import load_agent_config, resolve_agent_workspace_path, validate_agent_name
+
+        validated_agent = validate_agent_name(agent_name)
+        if validated_agent:
+            agent_cfg = load_agent_config(validated_agent, user_id=user_id)
+            agent_workspace_path = resolve_agent_workspace_path(
+                validated_agent,
+                agent_cfg.workspace if agent_cfg else None,
+                thread_id=thread_id,
+                user_id=user_id,
+            )
+            if agent_workspace_path is not None:
+                workspace_path = agent_workspace_path
+    except FileNotFoundError:
+        logger.debug("Agent %s not found while resolving workspace-change roots", agent_name)
+    except ValueError:
+        logger.warning("Invalid agent workspace config for %s; using thread workspace", agent_name, exc_info=True)
+
     return [
         WorkspaceRoot(
             name="workspace",
-            host_path=paths.sandbox_work_dir(thread_id, user_id=user_id),
+            host_path=workspace_path,
             virtual_prefix="/mnt/user-data/workspace",
         ),
         WorkspaceRoot(
@@ -38,11 +58,11 @@ def build_thread_workspace_roots(thread_id: str, *, user_id: str | None = None) 
     ]
 
 
-def _prepare_capture(thread_id: str, *, user_id: str | None, include_text: bool) -> tuple[list[WorkspaceRoot], Path | None]:
+def _prepare_capture(thread_id: str, *, user_id: str | None, agent_name: str | None, include_text: bool) -> tuple[list[WorkspaceRoot], Path | None]:
     # Worker thread: resolving the sandbox roots hits the filesystem, and mkdtemp
     # creates the text cache directory — both blocking IO that must stay off the
     # event loop.
-    roots = build_thread_workspace_roots(thread_id, user_id=user_id)
+    roots = build_thread_workspace_roots(thread_id, user_id=user_id, agent_name=agent_name)
     text_cache_dir = Path(tempfile.mkdtemp(prefix="deerflow-workspace-changes-")) if include_text else None
     return roots, text_cache_dir
 
@@ -78,6 +98,7 @@ async def capture_workspace_snapshot(
     thread_id: str,
     *,
     user_id: str | None = None,
+    agent_name: str | None = None,
     limits: WorkspaceChangeLimits | None = None,
     include_text: bool = True,
 ) -> WorkspaceSnapshot:
@@ -85,7 +106,7 @@ async def capture_workspace_snapshot(
     # handoff must be cancellation-safe: if the run is cancelled after mkdtemp
     # but before we receive the path, the shielded worker still finishes and we
     # reclaim its result to remove the orphaned dir before re-raising.
-    prepare = asyncio.ensure_future(asyncio.to_thread(_prepare_capture, thread_id, user_id=user_id, include_text=include_text))
+    prepare = asyncio.ensure_future(asyncio.to_thread(_prepare_capture, thread_id, user_id=user_id, agent_name=agent_name, include_text=include_text))
     try:
         roots, text_cache_dir = await asyncio.shield(prepare)
     except asyncio.CancelledError:
@@ -123,10 +144,11 @@ async def record_workspace_changes(
     before: WorkspaceSnapshot,
     *,
     user_id: str | None = None,
+    agent_name: str | None = None,
     limits: WorkspaceChangeLimits | None = None,
 ) -> dict | None:
     try:
-        roots = await asyncio.to_thread(build_thread_workspace_roots, thread_id, user_id=user_id)
+        roots = await asyncio.to_thread(build_thread_workspace_roots, thread_id, user_id=user_id, agent_name=agent_name)
         after_metadata = await asyncio.to_thread(
             scan_workspace_roots,
             roots,

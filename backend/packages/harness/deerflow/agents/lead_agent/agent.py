@@ -519,6 +519,7 @@ def _make_lead_agent(config: RunnableConfig, *, app_config: AppConfig):
             "tool_groups": agent_config.tool_groups if agent_config else None,
             "mcp_servers": agent_config.mcp_servers if agent_config else None,
             "mcp_tools": agent_config.mcp_tools if agent_config else None,
+            "workspace": agent_config.workspace.model_dump(mode="json") if agent_config else None,
             "available_skills": sorted(available_skills) if available_skills is not None else None,
         }
     )

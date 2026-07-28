@@ -776,6 +776,19 @@ type CoTStep = CoTAssistantTextStep | CoTReasoningStep | CoTToolCallStep;
 
 function convertToSteps(messages: Message[]): CoTStep[] {
   const steps: CoTStep[] = [];
+  const pairedToolCallIds = new Set<string>();
+
+  for (const message of messages) {
+    if (message.type !== "ai") {
+      continue;
+    }
+    for (const toolCall of message.tool_calls ?? []) {
+      if (toolCall.id) {
+        pairedToolCallIds.add(toolCall.id);
+      }
+    }
+  }
+
   for (const [messageIndex, message] of messages.entries()) {
     if (message.type === "ai") {
       const content = extractContentFromMessage(message);
@@ -822,6 +835,20 @@ function convertToSteps(messages: Message[]): CoTStep[] {
         }
         steps.push(step);
       }
+    } else if (
+      message.type === "tool" &&
+      (!message.tool_call_id || !pairedToolCallIds.has(message.tool_call_id))
+    ) {
+      steps.push({
+        id: message.tool_call_id ?? message.id ?? `tool-${messageIndex}`,
+        type: "toolCall",
+        name:
+          typeof message.name === "string" && message.name.length > 0
+            ? message.name
+            : "tool",
+        args: {},
+        result: extractContentFromMessage(message),
+      });
     }
   }
   return steps;

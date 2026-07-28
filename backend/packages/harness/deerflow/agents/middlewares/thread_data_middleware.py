@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import NotRequired, override
 
 from langchain.agents import AgentState
@@ -9,6 +10,7 @@ from langgraph.config import get_config
 from langgraph.runtime import Runtime
 
 from deerflow.agents.thread_state import ThreadDataState
+from deerflow.config.agents_config import load_agent_config, resolve_agent_workspace_path, validate_agent_name
 from deerflow.config.paths import Paths, get_paths
 from deerflow.runtime.user_context import get_effective_user_id
 
@@ -49,7 +51,7 @@ class ThreadDataMiddleware(AgentMiddleware[ThreadDataMiddlewareState]):
         self._paths = Paths(base_dir) if base_dir else get_paths()
         self._lazy_init = lazy_init
 
-    def _get_thread_paths(self, thread_id: str, user_id: str | None = None) -> dict[str, str]:
+    def _get_thread_paths(self, thread_id: str, user_id: str | None = None, agent_name: str | None = None) -> dict[str, str]:
         """Get the paths for a thread's data directories.
 
         Args:
@@ -59,13 +61,30 @@ class ThreadDataMiddleware(AgentMiddleware[ThreadDataMiddlewareState]):
         Returns:
             Dictionary with workspace_path, uploads_path, and outputs_path.
         """
+        workspace_path = self._paths.sandbox_work_dir(thread_id, user_id=user_id)
+        if agent_name:
+            try:
+                agent_cfg = load_agent_config(agent_name, user_id=user_id)
+                agent_workspace_path = resolve_agent_workspace_path(
+                    agent_name,
+                    agent_cfg.workspace if agent_cfg else None,
+                    thread_id=thread_id,
+                    user_id=user_id,
+                )
+                if agent_workspace_path is not None:
+                    workspace_path = agent_workspace_path
+            except FileNotFoundError:
+                logger.debug("Agent %s not found while resolving thread workspace", agent_name)
+            except ValueError:
+                logger.warning("Invalid agent workspace config for %s; using thread workspace", agent_name, exc_info=True)
+
         return {
-            "workspace_path": str(self._paths.sandbox_work_dir(thread_id, user_id=user_id)),
+            "workspace_path": str(workspace_path),
             "uploads_path": str(self._paths.sandbox_uploads_dir(thread_id, user_id=user_id)),
             "outputs_path": str(self._paths.sandbox_outputs_dir(thread_id, user_id=user_id)),
         }
 
-    def _create_thread_directories(self, thread_id: str, user_id: str | None = None) -> dict[str, str]:
+    def _create_thread_directories(self, thread_id: str, user_id: str | None = None, agent_name: str | None = None) -> dict[str, str]:
         """Create the thread data directories.
 
         Args:
@@ -76,7 +95,11 @@ class ThreadDataMiddleware(AgentMiddleware[ThreadDataMiddlewareState]):
             Dictionary with the created directory paths.
         """
         self._paths.ensure_thread_dirs(thread_id, user_id=user_id)
-        return self._get_thread_paths(thread_id, user_id=user_id)
+        paths = self._get_thread_paths(thread_id, user_id=user_id, agent_name=agent_name)
+        workspace = paths.get("workspace_path")
+        if workspace:
+            Path(workspace).mkdir(parents=True, exist_ok=True)
+        return paths
 
     @override
     def before_agent(self, state: ThreadDataMiddlewareState, runtime: Runtime) -> dict | None:
@@ -90,13 +113,22 @@ class ThreadDataMiddleware(AgentMiddleware[ThreadDataMiddlewareState]):
             raise ValueError("Thread ID is required in runtime context or config.configurable")
 
         user_id = get_effective_user_id()
+        raw_agent_name = context.get("agent_name")
+        if raw_agent_name is None:
+            config = get_config()
+            raw_agent_name = config.get("configurable", {}).get("agent_name")
+        try:
+            agent_name = validate_agent_name(raw_agent_name)
+        except ValueError:
+            logger.warning("Ignoring invalid agent_name while resolving thread workspace: %r", raw_agent_name)
+            agent_name = None
 
         if self._lazy_init:
             # Lazy initialization: only compute paths, don't create directories
-            paths = self._get_thread_paths(thread_id, user_id=user_id)
+            paths = self._get_thread_paths(thread_id, user_id=user_id, agent_name=agent_name)
         else:
             # Eager initialization: create directories immediately
-            paths = self._create_thread_directories(thread_id, user_id=user_id)
+            paths = self._create_thread_directories(thread_id, user_id=user_id, agent_name=agent_name)
             logger.debug("Created thread data directories for thread %s", thread_id)
 
         messages = list(state.get("messages", []))

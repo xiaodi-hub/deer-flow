@@ -92,13 +92,14 @@ export function getMessageGroups(messages: Message[]): MessageGroup[] {
           if (lastGroup) {
             lastGroup.messages.push(message);
           } else {
-            // groups is empty (shouldn't happen — the outer for loop is guarded
-            // by `messages.length === 0 -> return []`), but keep the diagnostic
-            // just in case.
-            console.error(
-              "Unexpected tool message with no preceding group",
-              message,
-            );
+            // History pagination and live stream replay can also expose a tool
+            // result as the first visible row when the matching AI tool-call is
+            // hidden, unloaded, or still waiting on a later state snapshot.
+            groups.push({
+              id: message.id,
+              type: "assistant:processing",
+              messages: [message],
+            });
           }
         }
       }
