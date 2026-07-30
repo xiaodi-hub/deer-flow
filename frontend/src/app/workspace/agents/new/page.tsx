@@ -5,8 +5,10 @@ import {
   BotIcon,
   CheckCircleIcon,
   InfoIcon,
+  MessageCircleIcon,
   MoreHorizontalIcon,
   SaveIcon,
+  SlidersHorizontalIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -27,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { ManualAgentCreateForm } from "@/components/workspace/agents/manual-agent-create-form";
 import { ArtifactsProvider } from "@/components/workspace/artifacts";
 import { MessageList } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
@@ -52,6 +55,7 @@ import { isIMEComposing } from "@/lib/ime";
 import { cn } from "@/lib/utils";
 
 type Step = "name" | "chat";
+type CreationMode = "manual" | "chat";
 type SetupAgentStatus = "idle" | "requested" | "completed";
 
 const NAME_RE = /^[A-Za-z0-9-]+$/;
@@ -83,6 +87,7 @@ export default function NewAgentPage() {
   const router = useRouter();
   const [localSettings] = useLocalSettings();
 
+  const [creationMode, setCreationMode] = useState<CreationMode>("manual");
   const [step, setStep] = useState<Step>("name");
   const [nameInput, setNameInput] = useState("");
   const [nameError, setNameError] = useState("");
@@ -316,7 +321,7 @@ export default function NewAgentPage() {
         <h1 className="text-sm font-semibold">{t.agents.createPageTitle}</h1>
       </div>
 
-      {step === "chat" ? (
+      {creationMode === "chat" && step === "chat" ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon-sm" aria-label={t.agents.more}>
@@ -343,10 +348,82 @@ export default function NewAgentPage() {
     </header>
   );
 
+  const modeSwitcher = !agent ? (
+    <div className="border-b px-4 py-3">
+      <div className="mx-auto flex w-full max-w-5xl gap-2">
+        <Button
+          type="button"
+          variant={creationMode === "manual" ? "secondary" : "ghost"}
+          onClick={() => setCreationMode("manual")}
+        >
+          <SlidersHorizontalIcon className="h-4 w-4" />
+          {t.agents.createModeManual}
+        </Button>
+        <Button
+          type="button"
+          variant={creationMode === "chat" ? "secondary" : "ghost"}
+          onClick={() => setCreationMode("chat")}
+        >
+          <MessageCircleIcon className="h-4 w-4" />
+          {t.agents.createModeChat}
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
+  const createdActions = agent ? (
+    <div className="flex size-full flex-col">
+      {header}
+      <main className="flex flex-1 items-center justify-center px-4">
+        <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-md border py-8 text-center">
+          <CheckCircleIcon className="text-primary h-10 w-10" />
+          <p className="font-semibold">{t.agents.agentCreated}</p>
+          <div className="flex gap-2">
+            <Button
+              onClick={() =>
+                router.push(`/workspace/agents/${agentName}/chats/new`)
+              }
+            >
+              {t.agents.startChatting}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => router.push("/workspace/agents")}
+            >
+              {t.agents.backToGallery}
+            </Button>
+          </div>
+        </div>
+      </main>
+    </div>
+  ) : null;
+
+  if (createdActions) {
+    return createdActions;
+  }
+
+  if (creationMode === "manual") {
+    return (
+      <div className="flex size-full flex-col">
+        {header}
+        {modeSwitcher}
+        <main className="min-h-0 flex-1 overflow-auto">
+          <ManualAgentCreateForm
+            onCreated={(created) => {
+              setAgent(created);
+              setAgentName(created.name);
+            }}
+          />
+        </main>
+      </div>
+    );
+  }
+
   if (step === "name") {
     return (
       <div className="flex size-full flex-col">
         {header}
+        {modeSwitcher}
         <main className="flex flex-1 flex-col items-center justify-center px-4">
           <div className="w-full max-w-sm space-y-8">
             <div className="space-y-3 text-center">
@@ -397,6 +474,7 @@ export default function NewAgentPage() {
       <ArtifactsProvider>
         <div className="flex size-full flex-col">
           {header}
+          {modeSwitcher}
 
           <main className="flex min-h-0 flex-1 flex-col">
             {showSaveHint ? (
@@ -431,45 +509,21 @@ export default function NewAgentPage() {
                 className="w-full max-w-(--chat-container-width)"
                 style={chatContainerStyle}
               >
-                {agent ? (
-                  <div className="flex flex-col items-center gap-4 rounded-2xl border py-8 text-center">
-                    <CheckCircleIcon className="text-primary h-10 w-10" />
-                    <p className="font-semibold">{t.agents.agentCreated}</p>
-                    <div className="flex gap-2">
-                      <Button
-                        onClick={() =>
-                          router.push(
-                            `/workspace/agents/${agentName}/chats/new`,
-                          )
-                        }
-                      >
-                        {t.agents.startChatting}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => router.push("/workspace/agents")}
-                      >
-                        {t.agents.backToGallery}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <PromptInput
+                <PromptInput
+                  disabled={thread.isLoading || hasOpenHumanInputCard}
+                  onSubmit={({ text }) => void handleChatSubmit(text)}
+                >
+                  <PromptInputTextarea
+                    autoFocus
+                    placeholder={t.agents.createPageSubtitle}
                     disabled={thread.isLoading || hasOpenHumanInputCard}
-                    onSubmit={({ text }) => void handleChatSubmit(text)}
-                  >
-                    <PromptInputTextarea
-                      autoFocus
-                      placeholder={t.agents.createPageSubtitle}
+                  />
+                  <PromptInputFooter className="justify-end">
+                    <PromptInputSubmit
                       disabled={thread.isLoading || hasOpenHumanInputCard}
                     />
-                    <PromptInputFooter className="justify-end">
-                      <PromptInputSubmit
-                        disabled={thread.isLoading || hasOpenHumanInputCard}
-                      />
-                    </PromptInputFooter>
-                  </PromptInput>
-                )}
+                  </PromptInputFooter>
+                </PromptInput>
               </div>
             </div>
           </main>

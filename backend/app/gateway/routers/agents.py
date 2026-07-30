@@ -11,15 +11,19 @@ import yaml
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+import deerflow.utils.llm_text as llm_text
+from app.gateway.deps import get_config
 from deerflow.config.agents_api_config import get_agents_api_config
 from deerflow.config.agents_config import AgentConfig, AgentMemoryConfig, AgentWorkspaceConfig, list_custom_agents, load_agent_config, load_agent_soul, preserve_non_managed_fields
 from deerflow.config.paths import get_paths
 from deerflow.runtime.user_context import get_effective_user_id
+from deerflow.utils.oneshot_llm import run_oneshot_llm
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["agents"])
 
 AGENT_NAME_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
+AGENT_PROMPT_POLISH_MAX_CHARS = 20_000
 
 
 class AgentResponse(BaseModel):
@@ -90,6 +94,23 @@ class AgentUpdateRequest(BaseModel):
     soul: str | None = Field(default=None, description="Updated SOUL.md content")
 
 
+class AgentPromptPolishRequest(BaseModel):
+    """Request body for improving an agent SOUL.md draft."""
+
+    soul: str = Field(..., description="Draft SOUL.md content")
+    locale: str | None = Field(default=None, description="Optional UI locale hint")
+    agent_name: str | None = Field(default=None, description="Optional agent name for tracing/context")
+    display_name: str | None = Field(default=None, description="Optional display name for context")
+    description: str | None = Field(default=None, description="Optional agent description for context")
+
+
+class AgentPromptPolishResponse(BaseModel):
+    """Optimized SOUL.md content."""
+
+    soul: str = Field(..., description="Optimized SOUL.md content")
+    changed: bool = Field(..., description="Whether the model changed the draft")
+
+
 class WorkspaceDirectorySelectRequest(BaseModel):
     """Request body for opening a local directory picker on the Gateway host."""
 
@@ -122,6 +143,38 @@ def _validate_agent_name(name: str) -> None:
 def _normalize_agent_name(name: str) -> str:
     """Normalize agent name to lowercase for filesystem storage."""
     return name.lower()
+
+
+def _clean_polished_agent_prompt(text: str) -> str:
+    candidate = llm_text.strip_think_blocks(text, truncate_unclosed=False)
+    candidate = llm_text.strip_markdown_code_fence(candidate)
+    return candidate.strip()
+
+
+def _build_agent_prompt_polish_system_instruction() -> str:
+    return (
+        "You are DeerFlow's custom-agent prompt editor.\n"
+        "Rewrite the user's draft SOUL.md into a stronger system prompt for a persistent custom AI agent.\n"
+        "Preserve the user's intent, domain, language, constraints, boundaries, and any explicit tool/MCP/workspace assumptions.\n"
+        "Improve clarity by organizing role, responsibilities, operating style, decision rules, tool-use guidance, refusal/escalation boundaries, and expected output style when relevant.\n"
+        "Do not invent capabilities, integrations, credentials, private data, business facts, dates, tools, MCP servers, or policies that the user did not provide.\n"
+        "Do not create a user-facing chat message and do not explain your edits.\n"
+        "Output only the complete improved SOUL.md content, with no markdown wrapper or alternatives."
+    )
+
+
+def _build_agent_prompt_polish_user_content(body: AgentPromptPolishRequest) -> str:
+    locale_hint = body.locale.strip() if body.locale else "same language as the draft"
+    context_lines = [f"Locale hint: {locale_hint}"]
+    if body.agent_name:
+        context_lines.append(f"Agent name: {body.agent_name.strip()}")
+    if body.display_name:
+        context_lines.append(f"Display name: {body.display_name.strip()}")
+    if body.description:
+        context_lines.append(f"Description: {body.description.strip()}")
+
+    context = "\n".join(context_lines)
+    return f"{context}\n\nImprove this SOUL.md draft:\n<draft_soul>\n{body.soul}\n</draft_soul>"
 
 
 def _require_agents_api_enabled() -> None:
@@ -305,6 +358,48 @@ async def get_agent(name: str) -> AgentResponse:
     except Exception as e:
         logger.error(f"Failed to get agent '{name}': {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get agent: {str(e)}")
+
+
+@router.post(
+    "/agents/prompt-polish",
+    response_model=AgentPromptPolishResponse,
+    summary="Polish Agent Prompt",
+    description="Rewrite a custom agent SOUL.md draft without creating a thread run or persisting changes.",
+)
+async def polish_agent_prompt(
+    body: AgentPromptPolishRequest,
+) -> AgentPromptPolishResponse:
+    """Improve a custom agent prompt draft for the settings/create UI."""
+    _require_agents_api_enabled()
+
+    soul = body.soul.strip()
+    if not soul:
+        raise HTTPException(status_code=400, detail="SOUL.md content is required")
+    if len(soul) > AGENT_PROMPT_POLISH_MAX_CHARS:
+        raise HTTPException(status_code=400, detail=f"SOUL.md content exceeds {AGENT_PROMPT_POLISH_MAX_CHARS} characters")
+    config = get_config()
+    if not config.input_polish.enabled:
+        raise HTTPException(status_code=404, detail="Prompt polishing is disabled")
+
+    model_name = config.input_polish.model_name
+    try:
+        raw = await run_oneshot_llm(
+            system_instruction=_build_agent_prompt_polish_system_instruction(),
+            user_content=_build_agent_prompt_polish_user_content(body),
+            run_name="agent_prompt_polish",
+            app_config=config,
+            model_name=model_name,
+            thread_id=body.agent_name,
+        )
+        polished = _clean_polished_agent_prompt(raw)
+    except Exception as exc:
+        logger.exception("Failed to polish agent prompt: agent_name=%s err=%s", body.agent_name, exc)
+        raise HTTPException(status_code=503, detail="Failed to polish agent prompt") from exc
+
+    if not polished:
+        raise HTTPException(status_code=503, detail="Failed to polish agent prompt")
+
+    return AgentPromptPolishResponse(soul=polished, changed=polished != soul)
 
 
 @router.post(

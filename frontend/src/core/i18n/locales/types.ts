@@ -323,6 +323,7 @@ export interface Translations {
     settingsMemory: string;
     settingsWorkspace: string;
     settingsSaveSuccess: string;
+    fieldName: string;
     fieldDisplayName: string;
     fieldEnabled: string;
     fieldCategory: string;
@@ -336,6 +337,12 @@ export interface Translations {
     fieldMcpTools: string;
     fieldMcpServers: string;
     fieldSkills: string;
+    promptPolish: string;
+    promptPolishing: string;
+    promptPolishTooltip: string;
+    promptPolishSuccess: string;
+    promptPolishNoChange: string;
+    promptRequiredError: string;
     modelDefault: string;
     emptyMcpServers: string;
     skillsAll: string;
@@ -362,6 +369,9 @@ export interface Translations {
     newChat: string;
     createPageTitle: string;
     createPageSubtitle: string;
+    createModeManual: string;
+    createModeChat: string;
+    createFromConfig: string;
     nameStepTitle: string;
     nameStepHint: string;
     nameStepPlaceholder: string;

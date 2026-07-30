@@ -7,6 +7,7 @@ import {
   fetchAgentsApiEnabled,
   getAgent,
   listAgents,
+  polishAgentPrompt,
   updateAgent,
 } from "./api";
 import {
@@ -14,7 +15,11 @@ import {
   resolveAgentsApiEnabled,
   writeCachedAgentsApiEnabled,
 } from "./feature-cache";
-import type { CreateAgentRequest, UpdateAgentRequest } from "./types";
+import type {
+  CreateAgentRequest,
+  PolishAgentPromptRequest,
+  UpdateAgentRequest,
+} from "./types";
 
 export function useAgentsApiEnabled() {
   const { data, isPending } = useQuery({
@@ -96,6 +101,13 @@ export function useUpdateAgent() {
       void queryClient.invalidateQueries({ queryKey: ["agents"] });
       void queryClient.invalidateQueries({ queryKey: ["agents", name] });
     },
+  });
+}
+
+export function usePolishAgentPrompt() {
+  return useMutation({
+    mutationFn: (request: PolishAgentPromptRequest) =>
+      polishAgentPrompt(request),
   });
 }
 

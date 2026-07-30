@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -593,6 +594,26 @@ class TestAgentsAPI:
         assert data["description"] == "Reviews code"
         assert data["soul"] == "You are a code reviewer."
 
+    def test_polish_agent_prompt(self, agent_client):
+        async def fake_run_oneshot_llm(**kwargs):
+            assert kwargs["run_name"] == "agent_prompt_polish"
+            assert "Draft soul" in kwargs["user_content"]
+            return "```markdown\nImproved soul\n```"
+
+        fake_config = SimpleNamespace(input_polish=SimpleNamespace(enabled=True, model_name="test-model"))
+        with patch("app.gateway.routers.agents.get_config", return_value=fake_config), patch("app.gateway.routers.agents.run_oneshot_llm", fake_run_oneshot_llm):
+            response = agent_client.post(
+                "/api/agents/prompt-polish",
+                json={"soul": "Draft soul", "agent_name": "draft-agent"},
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"soul": "Improved soul", "changed": True}
+
+    def test_polish_agent_prompt_requires_soul(self, agent_client):
+        response = agent_client.post("/api/agents/prompt-polish", json={"soul": "   "})
+        assert response.status_code == 400
+
     def test_create_agent_invalid_name(self, agent_client):
         payload = {"name": "Code Reviewer!", "soul": "test"}
         response = agent_client.post("/api/agents", json=payload)
@@ -997,6 +1018,10 @@ class TestAgentsApiDisabled:
 
     def test_agent_create_returns_403(self, disabled_agent_client):
         response = disabled_agent_client.post("/api/agents", json={"name": "example-agent", "soul": "blocked"})
+        assert response.status_code == 403
+
+    def test_agent_prompt_polish_returns_403(self, disabled_agent_client):
+        response = disabled_agent_client.post("/api/agents/prompt-polish", json={"soul": "blocked"})
         assert response.status_code == 403
 
     def test_agent_update_returns_403(self, disabled_agent_client):

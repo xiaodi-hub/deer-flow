@@ -28,7 +28,10 @@ skill allowlist, `SOUL.md`, gallery metadata, memory policy, and workspace polic
 The frontend includes an agent settings surface at
 `/workspace/agents/{agent_name}/settings`; agent workspaces can keep the default
 per-thread directory, share an agent-level directory, or point `/mnt/user-data/workspace`
-at a custom host path.
+at a custom host path. `/workspace/agents/new` supports both direct configuration-based
+creation (prompt/tools/MCP/memory/workspace first, then write the agent files) and the
+legacy guided chat setup flow; prompt editors expose a polish action backed by the
+Gateway agents API.
 
 ## Service Topology
 

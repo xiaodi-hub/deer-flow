@@ -1,7 +1,14 @@
+import { throwGatewayApiError } from "@/core/api/errors";
 import { fetch } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
 
-import type { Agent, CreateAgentRequest, UpdateAgentRequest } from "./types";
+import type {
+  Agent,
+  CreateAgentRequest,
+  PolishAgentPromptRequest,
+  PolishAgentPromptResponse,
+  UpdateAgentRequest,
+} from "./types";
 
 const BACKEND_UNAVAILABLE_STATUSES = new Set([502, 503, 504]);
 
@@ -78,6 +85,20 @@ export async function updateAgent(
     throw new Error(err.detail ?? `Failed to update agent: ${res.statusText}`);
   }
   return res.json() as Promise<Agent>;
+}
+
+export async function polishAgentPrompt(
+  request: PolishAgentPromptRequest,
+): Promise<PolishAgentPromptResponse> {
+  const res = await fetch(`${getBackendBaseURL()}/api/agents/prompt-polish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!res.ok) {
+    await throwGatewayApiError(res, "Failed to polish agent prompt");
+  }
+  return res.json() as Promise<PolishAgentPromptResponse>;
 }
 
 export async function selectWorkspaceDirectory(

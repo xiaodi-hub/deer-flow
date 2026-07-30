@@ -6,6 +6,7 @@ import {
   CheckIcon,
   FolderOpenIcon,
   SaveIcon,
+  WandSparklesIcon,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
@@ -25,9 +26,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip } from "@/components/workspace/tooltip";
 import {
   selectWorkspaceDirectory,
   useAgent,
+  usePolishAgentPrompt,
   useUpdateAgent,
 } from "@/core/agents";
 import type { Agent, UpdateAgentRequest } from "@/core/agents";
@@ -129,12 +132,13 @@ function ToggleRow({
 }
 
 export default function AgentSettingsPage() {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const router = useRouter();
   const params = useParams<{ agent_name: string }>();
   const agentName = decodeURIComponent(params.agent_name);
   const { agent, isLoading } = useAgent(agentName);
   const updateAgent = useUpdateAgent();
+  const polishPrompt = usePolishAgentPrompt();
   const { models } = useModels();
   const { config: mcpConfig } = useMCPConfig();
   const { skills } = useSkills();
@@ -264,6 +268,29 @@ export default function AgentSettingsPage() {
     }
   }
 
+  async function handlePolishPrompt() {
+    const trimmedSoul = soul.trim();
+    if (!trimmedSoul || polishPrompt.isPending) return;
+
+    try {
+      const result = await polishPrompt.mutateAsync({
+        soul: trimmedSoul,
+        locale,
+        agent_name: agentName,
+        display_name: displayName.trim() || null,
+        description: description.trim() || null,
+      });
+      setSoul(result.soul);
+      toast.success(
+        result.changed
+          ? t.agents.promptPolishSuccess
+          : t.agents.promptPolishNoChange,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function handleSelectWorkspacePath() {
     setIsSelectingWorkspacePath(true);
     try {
@@ -383,13 +410,31 @@ export default function AgentSettingsPage() {
             </TabsContent>
 
             <TabsContent value="prompt">
-              <Field label={t.agents.fieldSoul}>
+              <div className="grid gap-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium">{t.agents.fieldSoul}</span>
+                  <Tooltip content={t.agents.promptPolishTooltip}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handlePolishPrompt()}
+                      disabled={!soul.trim() || polishPrompt.isPending}
+                      aria-label={t.agents.promptPolish}
+                    >
+                      <WandSparklesIcon className="h-4 w-4" />
+                      {polishPrompt.isPending
+                        ? t.agents.promptPolishing
+                        : t.agents.promptPolish}
+                    </Button>
+                  </Tooltip>
+                </div>
                 <Textarea
                   value={soul}
                   onChange={(e) => setSoul(e.target.value)}
                   className="min-h-[520px] font-mono text-sm"
                 />
-              </Field>
+              </div>
             </TabsContent>
 
             <TabsContent

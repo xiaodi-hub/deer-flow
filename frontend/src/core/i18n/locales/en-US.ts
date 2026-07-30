@@ -410,6 +410,7 @@ export const enUS: Translations = {
     settingsMemory: "Memory",
     settingsWorkspace: "Workspace",
     settingsSaveSuccess: "Agent settings saved",
+    fieldName: "Agent directory name",
     fieldDisplayName: "Display name",
     fieldEnabled: "Enabled",
     fieldCategory: "Category",
@@ -423,6 +424,13 @@ export const enUS: Translations = {
     fieldMcpTools: "MCP tool allowlist (one per line, blank inherits all)",
     fieldMcpServers: "MCP servers",
     fieldSkills: "Skills",
+    promptPolish: "Improve prompt",
+    promptPolishing: "Improving...",
+    promptPolishTooltip:
+      "Ask DeerFlow to rewrite the current SOUL.md into a clearer long-lived agent prompt",
+    promptPolishSuccess: "Prompt improved",
+    promptPolishNoChange: "Prompt already looks clear; no major changes made",
+    promptRequiredError: "Fill in the prompt first",
     modelDefault: "Use system default model",
     emptyMcpServers: "No MCP servers configured",
     skillsAll: "Use all enabled skills",
@@ -452,6 +460,9 @@ export const enUS: Translations = {
     createPageTitle: "Design your Agent",
     createPageSubtitle:
       "Describe the agent you want — I'll help you create it through conversation.",
+    createModeManual: "Configure",
+    createModeChat: "Chat setup",
+    createFromConfig: "Create agent",
     nameStepTitle: "Name your new Agent",
     nameStepHint:
       "Letters, digits, and hyphens only — stored lowercase (e.g. code-reviewer)",

@@ -26,7 +26,11 @@ rs.mock("@/core/config", () => ({
   getBackendBaseURL: () => "",
 }));
 
-import { AgentsApiDisabledError, checkAgentName } from "@/core/agents/api";
+import {
+  AgentsApiDisabledError,
+  checkAgentName,
+  polishAgentPrompt,
+} from "@/core/agents/api";
 import { fetch as fetcher } from "@/core/api/fetcher";
 
 const mockedFetch = rs.mocked(fetcher);
@@ -144,6 +148,41 @@ describe("checkAgentName", () => {
     mockedFetch.mockResolvedValueOnce(jsonResponse(422, { detail }));
     await expect(checkAgentName("deal.agent")).rejects.not.toBeInstanceOf(
       AgentsApiDisabledError,
+    );
+  });
+});
+
+describe("polishAgentPrompt", () => {
+  test("posts to the agent prompt polish endpoint", async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse(200, { soul: "Improved soul", changed: true }),
+    );
+
+    const result = await polishAgentPrompt({
+      soul: "Draft soul",
+      locale: "en-US",
+      agent_name: "draft-agent",
+    });
+
+    expect(result).toEqual({ soul: "Improved soul", changed: true });
+    expect(mockedFetch).toHaveBeenCalledWith("/api/agents/prompt-polish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        soul: "Draft soul",
+        locale: "en-US",
+        agent_name: "draft-agent",
+      }),
+    });
+  });
+
+  test("surfaces backend detail on failure", async () => {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse(503, { detail: "Failed to polish agent prompt" }),
+    );
+
+    await expect(polishAgentPrompt({ soul: "Draft soul" })).rejects.toThrow(
+      "Failed to polish agent prompt",
     );
   });
 });

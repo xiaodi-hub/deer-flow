@@ -64,3 +64,16 @@ export interface UpdateAgentRequest {
   enabled?: boolean | null;
   soul?: string | null;
 }
+
+export interface PolishAgentPromptRequest {
+  soul: string;
+  locale?: string | null;
+  agent_name?: string | null;
+  display_name?: string | null;
+  description?: string | null;
+}
+
+export interface PolishAgentPromptResponse {
+  soul: string;
+  changed: boolean;
+}

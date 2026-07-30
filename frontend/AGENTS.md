@@ -42,7 +42,7 @@ Frontend (Next.js) ──▶ LangGraph SDK ──▶ LangGraph Backend (lead_age
                                               └── Tools & Skills
 ```
 
-The frontend is a stateful chat application. Users enter through the **Agent Gallery** (`/` redirects to `/workspace/agents`), choose a scene-specific agent profile, edit that profile's prompt/model/tools/memory/workspace settings, create **threads** (conversations), send messages, set thread-scoped `/goal` completion conditions, and receive streamed AI responses. The backend orchestrates agents that can produce **artifacts** (files/code), **todos**, and goal state updates.
+The frontend is a stateful chat application. Users enter through the **Agent Gallery** (`/` redirects to `/workspace/agents`), choose a scene-specific agent profile, edit that profile's prompt/model/tools/memory/workspace settings, create **threads** (conversations), send messages, set thread-scoped `/goal` completion conditions, and receive streamed AI responses. `/workspace/agents/new` offers both a direct configuration flow and the legacy chat-guided setup flow; the SOUL prompt fields in creation/settings can call the agents prompt-polish API. The backend orchestrates agents that can produce **artifacts** (files/code), **todos**, and goal state updates.
 
 ### Source Layout (`src/`)
 
